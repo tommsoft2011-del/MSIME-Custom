@@ -468,9 +468,22 @@ std::vector<WordItem> QuanpinDictionary::query_exact(const std::string &raw_inpu
     // 部分拼音不受纠错开关门控：它是输入法承诺兼容的输入方式（"zhge" -> "zhe"+"ge"），
     // 不是手误纠正。备选读法与主切分按词频竞争，高频词（如"这个"）会被推到前面。
     // 对完全合法的输入，这里只产生精确切分，去重后与现有行为一致。
+    // 另存一份 partial_pinyin_cuts：备选合并按权重排序时单字（1e6+）会压住双字词
+    // （"这个" 503750），而部分拼音是用户的明确意图不是"备选读音"，最佳词要在
+    // 函数末尾单独置顶（见 query_exact 末尾）。
+    std::vector<quanpin::Segments> partial_pinyin_cuts;
     for (const auto &candidate : quanpin::cut_pinyin_with_partial_pinyin(raw_input))
     {
-        append_alternative(candidate);
+        const std::string key = quanpin::join_segments(candidate);
+        if (key.empty() || !seen_segmentations.insert(key).second)
+        {
+            continue;
+        }
+        if (alternative_segmentations.size() < kSyllableGraphPathLimit)
+        {
+            alternative_segmentations.push_back(candidate);
+        }
+        partial_pinyin_cuts.push_back(candidate);
     }
 
     if (raw_input.find('\'') == std::string::npos && segments.size() <= kMaxSyllablesForMultipleSegmentations &&
@@ -698,6 +711,45 @@ std::vector<WordItem> QuanpinDictionary::query_exact(const std::string &raw_inpu
                 arbitrate_legal_corrections(raw_input, segments, resolution.legal_corrected_cuts, std::move(result));
         }
         keep_literal_whole_word_first(result, raw_input);
+    }
+    // 部分拼音置顶：它是用户的明确意图（"zhge" 就是 "zhege" 的缩写），不是"备选读音"。
+    // 备选合并按原始权重排序，单字（1e6+ 量级）天然压住双字词（"这个" 503750），导致
+    // 部分拼音的最佳词埋没在单字堆里。这里把最佳部分拼音词直接移到首位（若已在前3则不动，
+    // 避免打乱用户调频的结果）。
+    if (!partial_pinyin_cuts.empty() && result.size() > 3)
+    {
+        const auto partial_items =
+            quanpin::query_exact_segmentations_keyed_flat(partial_pinyin_cuts, db_, statement_cache_, 1);
+        if (!partial_items.empty())
+        {
+            const std::string &target_word = partial_items.front().value;
+            bool already_top = false;
+            for (size_t i = 0; i < 3 && i < result.size(); ++i)
+            {
+                if (result[i].word == target_word)
+                {
+                    already_top = true;
+                    break;
+                }
+            }
+            if (!already_top)
+            {
+                auto it = std::find_if(result.begin(), result.end(),
+                                       [&](const WordItem &item) { return item.word == target_word; });
+                if (it != result.end())
+                {
+                    WordItem top = std::move(*it);
+                    result.erase(it);
+                    result.insert(result.begin(), std::move(top));
+                }
+                else
+                {
+                    const auto &item = partial_items.front();
+                    result.insert(result.begin(),
+                                  WordItem(item.key, item.value, item.weight, CandidateSource::Database, item.key));
+                }
+            }
+        }
     }
     series_cache_.insert(resolution.cache_key, result);
     current_candidate_list_ = result;

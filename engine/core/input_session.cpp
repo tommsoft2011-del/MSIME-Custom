@@ -232,10 +232,10 @@ KeyResult InputSession::handle_candidate_key(char character)
     return select_candidate(static_cast<std::size_t>(character - '1'));
 }
 
-// "." 在中文全拼输入中是继续英文还是中文句点：当前输入全是小写字母、
+// 网址/邮箱符号在中文全拼输入中是继续英文还是中文标点：当前输入全是小写字母、
 // 且按部分拼音切分不出"拼音词"的形状（最佳切分全是单字母，如 "aaaa"），
-// 就判定为英文（"aaaa.com"）；"nihao"、"zhge"（->"zhe'ge"）走中文标点。
-bool InputSession::dot_continues_english_input() const
+// 就判定为英文（"aaaa.com"、"test@example.com"）；"nihao"、"zhge"（->"zhe'ge"）走中文标点。
+bool InputSession::symbol_continues_english_input() const
 {
     if (local_input_mode_ != LocalInputMode::None || dedicated_english_mode_)
     {
@@ -284,14 +284,15 @@ KeyResult InputSession::handle_punctuation(char character)
             update_dedicated_english_candidates();
             return {true, std::nullopt, std::nullopt};
         }
-        // 全拼中文模式下，纯小写字母输入 + "." 且字母串不是拼音词形（如 "aaaa"）时，
-        // 判定为英文输入，转入英文临时模式并保留 "."；"nihao." 仍是 "你好。"。
-        if (character == '.' && dot_continues_english_input())
+        // 全拼中文模式下，纯小写字母输入 + 网址/邮箱符号（"."、"@"）且字母串不是拼音词形
+        // （如 "aaaa"、"test"）时，判定为英文输入，转入英文临时模式并保留符号；
+        // "nihao." 仍是 "你好。"。
+        if ((character == '.' || character == '@') && symbol_continues_english_input())
         {
             const std::string raw_letters = engine_.get_request().raw_input;
             reset_composition();
             local_input_mode_ = LocalInputMode::TemporaryEnglish;
-            local_preedit_ = "Y" + raw_letters + ".";
+            local_preedit_ = "Y" + raw_letters + character;
             return {true, std::nullopt, update_local_candidates()};
         }
     }

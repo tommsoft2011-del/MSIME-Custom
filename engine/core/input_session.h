@@ -44,7 +44,7 @@ class InputSession
     KeyResult handle_candidate_key(char character);
     KeyResult handle_punctuation(char character);
     // 中文全拼输入中的 "." 是继续英文（如 "aaaa.com"）还是中文句点。
-    bool dot_continues_english_input() const;
+    bool symbol_continues_english_input() const;
     // Commit the selected prefix and retain any unconsumed pinyin. Hosts insert
     // KeyResult::commit and then render the remaining preedit from this session.
     KeyResult select_candidate(std::size_t index);
