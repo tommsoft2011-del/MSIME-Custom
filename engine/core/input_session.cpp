@@ -295,6 +295,17 @@ KeyResult InputSession::handle_punctuation(char character)
             local_preedit_ = "Y" + raw_letters + character;
             return {true, std::nullopt, update_local_candidates()};
         }
+        // 用户要求：中文状态下无候选时（已上屏中文后，或空状态），输入 "."/"@"
+        // 直接进入英文临时模式。有拼音候选时 "." 仍是中文标点 "。"。
+        if ((character == '.' || character == '@') && !has_composition() &&
+            local_input_mode_ == LocalInputMode::None && !dedicated_english_mode_ &&
+            scheme() == SchemeType::Quanpin)
+        {
+            reset_composition();
+            local_input_mode_ = LocalInputMode::TemporaryEnglish;
+            local_preedit_ = "Y" + std::string(1, character);
+            return {true, std::nullopt, update_local_candidates()};
+        }
     }
 
     const auto punctuation = punctuation_.translate(character);
