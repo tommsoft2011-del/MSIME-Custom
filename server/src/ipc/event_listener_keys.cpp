@@ -270,13 +270,6 @@ bool IsCandidateNavigationKey(UINT keycode)
     {
         return false;
     }
-    // Custom: comma/period are not navigation keys when paging is disabled.
-    // Engine handle_punctuation takes over (temporary English mode).
-    const bool is_comma_period = keycode == VK_OEM_COMMA || keycode == VK_OEM_PERIOD;
-    if (is_comma_period && !GetConfiguredPagingCommaPeriodEnabled())
-    {
-        return false;
-    }
     return keycode == VK_OEM_MINUS || keycode == VK_OEM_PLUS || keycode == VK_OEM_COMMA || keycode == VK_OEM_PERIOD ||
            keycode == VK_OEM_4 || keycode == VK_OEM_6 || keycode == VK_TAB || keycode == VK_PRIOR ||
            keycode == VK_NEXT || keycode == VK_UP || keycode == VK_DOWN;
