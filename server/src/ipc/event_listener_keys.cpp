@@ -270,8 +270,8 @@ bool IsCandidateNavigationKey(UINT keycode)
     {
         return false;
     }
-    // 定制版: "," "." 不再视为候选导航键, 由 engine 的 handle_punctuation
-    // 统一处理 (有候选时一律进英文临时模式)。
+    // Custom: comma/period are not navigation keys when paging is disabled.
+    // Engine handle_punctuation takes over (temporary English mode).
     const bool is_comma_period = keycode == VK_OEM_COMMA || keycode == VK_OEM_PERIOD;
     if (is_comma_period && !GetConfiguredPagingCommaPeriodEnabled())
     {
