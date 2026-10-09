@@ -41,7 +41,11 @@ bool SetConfiguredPagingTabEnabled(bool enabled)
 
 bool GetConfiguredPagingCommaPeriodEnabled()
 {
-    return g_paging_comma_period_enabled;
+    // 定制版：全局禁用 "," "." 翻页（用户要求）。
+    // 中文状态下英文输入时 "." 是正文的一部分，不能翻页；
+    // 用户明确要求取消 ",." 的翻页功能。
+    (void)g_paging_comma_period_enabled;
+    return false;
 }
 
 bool SetConfiguredPagingCommaPeriodEnabled(bool enabled)
