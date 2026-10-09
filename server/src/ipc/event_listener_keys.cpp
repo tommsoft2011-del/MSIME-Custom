@@ -115,16 +115,11 @@ bool IsCommitWithHighlightedCandidatePunctuationInCandidateMode(UINT keycode, WC
         L'"',  //
         L',',  //
         L'<',  //
-        L'.',  //
+        // 定制版（2026-10-09）："." 永不上屏，交给 engine 的 handle_punctuation
+        // 统一处理（有候选时一律进英文）。"," 保持原有上屏行为。
         L'>',  //
         L'?'   //
     };
-    // 定制版："," "." 如果会触发英文输入（如 "aaaa."），不上屏候选词，
-    // 交给 handle_punctuation 走英文分支；中文拼音（如 "nihao."）仍正常上屏 "你好。"。
-    if ((wch == L'.' || wch == L',') && IsPeriodEnglishInput())
-    {
-        return false;
-    }
     return kCommitWithHighlightedCandidatePunctuation.find(wch) != kCommitWithHighlightedCandidatePunctuation.end();
 }
 

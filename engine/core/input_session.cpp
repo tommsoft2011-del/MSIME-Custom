@@ -280,28 +280,27 @@ KeyResult InputSession::handle_punctuation(char character)
             update_dedicated_english_candidates();
             return {true, std::nullopt, std::nullopt};
         }
-        // 全拼中文模式下，纯小写字母输入 + 网址/邮箱符号（"."、"@"）且字母串不是拼音词形
-        // （如 "aaaa"、"test"）时，判定为英文输入，转入英文临时模式并保留符号；
-        // "nihao." 仍是 "你好。"。
-        if ((character == '.' || character == '@') && symbol_continues_english_input())
+    // 用户要求（2026-10-09）：中文模式下有拼音候选时，"." "@" 一律进英文临时模式，
+    // 不做"智能分辨"——aaa→啊啊啊 和 nihao→你好 无法可靠区分，硬分辨只会两头不讨好。
+    // 无候选时 "." 仍走下面的中文标点 "。"。
+    if ((character == '.' || character == '@') && has_composition() &&
+        local_input_mode_ == LocalInputMode::None && !dedicated_english_mode_ &&
+        scheme() == SchemeType::Quanpin)
+    {
+        const std::string raw_letters = engine_.get_request().raw_input;
+        // 只有纯小写字母才转英文，避免中文标点误触（如 "nihao," 的 "," 不应转）。
+        // 但 "." 按用户要求一律转（用户明确不要 nihao.→你好。）。
+        if (character == '.' ||
+            (character == '@' && !raw_letters.empty() &&
+             std::all_of(raw_letters.begin(), raw_letters.end(),
+                         [](char c) { return c >= 'a' && c <= 'z'; })))
         {
-            const std::string raw_letters = engine_.get_request().raw_input;
             reset_composition();
             local_input_mode_ = LocalInputMode::TemporaryEnglish;
             local_preedit_ = "Y" + raw_letters + character;
             return {true, std::nullopt, update_local_candidates()};
         }
-        // 用户要求：中文状态下无候选时（已上屏中文后，或空状态），输入 "."/"@"
-        // 直接进入英文临时模式。有拼音候选时 "." 仍是中文标点 "。"。
-        if ((character == '.' || character == '@') && !has_composition() &&
-            local_input_mode_ == LocalInputMode::None && !dedicated_english_mode_ &&
-            scheme() == SchemeType::Quanpin)
-        {
-            reset_composition();
-            local_input_mode_ = LocalInputMode::TemporaryEnglish;
-            local_preedit_ = "Y" + std::string(1, character);
-            return {true, std::nullopt, update_local_candidates()};
-        }
+    }
     }
 
     if (!chinese_punctuation_enabled_)
