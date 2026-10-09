@@ -152,11 +152,72 @@ const CorrectionAliases &partial_pinyin_aliases(size_t min_prefix_len = 2)
                 }
             }
         }
+        // 单字母前缀按词频排序（DB 权重统计），避免 k-best 截断时常用音节（如 fang）
+        // 被生僻短音节（如 fo）挤掉，导致 "maifz" 切不出 "mai"+"fang"+"zi"。
+        static const std::unordered_map<std::string, std::vector<std::string>> kSingleFreqOrder = {
+            {"a", {"an", "ai", "ao", "ang"}},
+            {"b", {"ba", "bu", "bei", "bian", "bi", "ban", "bao", "bai", "bing", "ben", "bie", "bo"}},
+            {"c", {"chang", "cheng", "chu", "ci", "cai", "cong", "chi", "chen", "chuan", "cha", "che", "chong"}},
+            {"d", {"de", "di", "da", "dao", "dan", "dui", "dei", "dian", "dong", "duo", "dang", "dai"}},
+            {"e", {"er", "en", "eng", "ei"}},
+            {"f", {"fang", "fu", "fa", "feng", "fen", "fei", "fan", "fo", "fou"}},
+            {"g", {"ge", "guo", "gong", "gan", "guan", "gao", "gu", "gei", "guang", "gen", "gai", "gui"}},
+            {"h", {"huo", "hui", "he", "hai", "hou", "hao", "hua", "hu", "hen", "hang", "huan", "han"}},
+            {"j", {"ji", "jiu", "jian", "jing", "jin", "jie", "jia", "jiao", "ju", "jiang", "jue", "jun"}},
+            {"k", {"kan", "ke", "kai", "kou", "kong", "kuai", "ku", "kuang", "kao", "ken", "kang", "ka"}},
+            {"l", {"li", "lai", "lian", "liang", "le", "ling", "lao", "la", "liu", "lu", "luo", "lin"}},
+            {"m", {"ma", "mei", "ming", "mian", "mo", "mu", "men", "man", "mi", "meng", "mao", "mang"}},
+            {"n", {"na", "nan", "nian", "nv", "ni", "nei", "nao", "nu", "nai", "nong", "niang", "ning"}},
+            {"o", {"ou"}},
+            {"p", {"ping", "pai", "po", "pa", "pi", "pian", "peng", "pao", "pu", "pin", "pang", "pei"}},
+            {"q", {"qi", "qing", "qu", "qian", "que", "quan", "qiang", "qin", "qie", "qiu", "qiao", "qun"}},
+            {"r", {"ren", "ran", "ru", "rang", "ri", "rong", "ruo", "re", "reng", "rou", "rao", "rui"}},
+            {"s", {"shi", "shang", "shen", "shuo", "sheng", "si", "shou", "shu", "suo", "shan", "shai", "shui"}},
+            {"t", {"ta", "tian", "tou", "tong", "ting", "tai", "ti", "tu", "tiao", "tan", "tao", "tang"}},
+            {"w", {"wo", "wei", "wu", "wen", "wang", "wan", "wai", "wa", "weng"}},
+            {"x", {"xiang", "xiao", "xia", "xi", "xing", "xie", "xian", "xin", "xue", "xu", "xiu", "xiong"}},
+            {"y", {"yi", "you", "ye", "yu", "yao", "yan", "yang", "yuan", "yin", "ying", "yong", "ya"}},
+            {"z", {"zai", "zhi", "zhe", "zi", "zhong", "zuo", "zhu", "zhang", "zheng", "zhen", "zhan", "zhao"}},
+        };
         CorrectionAliases aliases;
         for (auto &[prefix, targets] : by_prefix)
         {
-            std::stable_sort(targets.begin(), targets.end(),
-                             [](const std::string &lhs, const std::string &rhs) { return lhs.size() < rhs.size(); });
+            if (prefix.size() == 1)
+            {
+                const auto freq_it = kSingleFreqOrder.find(prefix);
+                if (freq_it != kSingleFreqOrder.end())
+                {
+                    std::vector<std::string> ordered;
+                    ordered.reserve(targets.size());
+                    for (const auto &syllable : freq_it->second)
+                    {
+                        if (std::find(targets.begin(), targets.end(), syllable) != targets.end())
+                        {
+                            ordered.push_back(syllable);
+                        }
+                    }
+                    for (const auto &syllable : targets)
+                    {
+                        if (std::find(ordered.begin(), ordered.end(), syllable) == ordered.end())
+                        {
+                            ordered.push_back(syllable);
+                        }
+                    }
+                    targets = std::move(ordered);
+                }
+                else
+                {
+                    std::stable_sort(
+                        targets.begin(), targets.end(),
+                        [](const std::string &lhs, const std::string &rhs) { return lhs.size() < rhs.size(); });
+                }
+            }
+            else
+            {
+                std::stable_sort(targets.begin(), targets.end(), [](const std::string &lhs, const std::string &rhs) {
+                    return lhs.size() < rhs.size();
+                });
+            }
             aliases.emplace(prefix, std::move(targets));
         }
         return aliases;
