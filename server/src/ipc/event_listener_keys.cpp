@@ -113,9 +113,9 @@ bool IsCommitWithHighlightedCandidatePunctuationInCandidateMode(UINT keycode, WC
         L':',  //
         L'\'', //
         L'"',  //
-        L',',  //
+        // 定制版："," "." 不在这里上屏，交给 handle_punctuation 处理
+        // （英文输入时 "." 是正文，"aaaa." 应进英文模式而非上屏 "啊啊啊啊。"）。
         L'<',  //
-        L'.',  //
         L'>',  //
         L'?'   //
     };
