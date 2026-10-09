@@ -262,11 +262,7 @@ bool InputSession::symbol_continues_english_input() const
 
 KeyResult InputSession::handle_punctuation(char character)
 {
-    if (!chinese_punctuation_enabled_)
-    {
-        return {};
-    }
-
+    // 英文网址/邮箱符号优先处理，不受中文标点开关影响。
     // 中文状态下输入英文时的网址符号（如 "aaaa.com" 中的 "."）：英文串里的符号
     // 是正文的一部分，原样保留进英文输入，不按中文标点上屏，更不能丢掉。
     if (is_english_url_symbol(character))
@@ -306,6 +302,11 @@ KeyResult InputSession::handle_punctuation(char character)
             local_preedit_ = "Y" + std::string(1, character);
             return {true, std::nullopt, update_local_candidates()};
         }
+    }
+
+    if (!chinese_punctuation_enabled_)
+    {
+        return {};
     }
 
     const auto punctuation = punctuation_.translate(character);
