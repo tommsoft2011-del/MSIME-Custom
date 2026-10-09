@@ -214,6 +214,11 @@ bool EngineInputSession::has_active_helpcode() const
     return session_.has_active_helpcode();
 }
 
+bool EngineInputSession::period_is_english_input() const
+{
+    return session_.local_input_mode() == LocalInputMode::TemporaryEnglish || session_.symbol_continues_english_input();
+}
+
 bool EngineInputSession::accepts_mid_sentence_helpcode_marker(std::size_t caret) const
 {
     // 开关在 ApplyConfiguration 里随每键重读；这里在吃键之前被问到，那一刻配置可能刚改过，

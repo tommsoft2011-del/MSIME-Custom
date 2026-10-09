@@ -42,6 +42,7 @@ class EngineInputSession : public IInputSession
     bool wubi_unique_four_code() const override;
     bool wubi_four_code_is_complete() const override;
     bool has_active_helpcode() const override;
+    bool period_is_english_input() const override;
     bool accepts_mid_sentence_helpcode_marker(std::size_t caret) const override;
     bool accepts_direct_helpcode_slash(std::size_t caret) const override;
     bool has_mid_sentence_helpcode() const override;

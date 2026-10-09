@@ -56,19 +56,11 @@ bool IsJapaneseDisabledPagingKey(UINT keycode)
 }
 
 // "." 在中文模式下输入英文网址/邮箱时是正文的一部分（如 "aaaa.com"），不应触发翻页：
-// 已在英文临时模式里，或按 symbol_continues_english_input 判定此次 "." 会转入英文模式时，
+// 已在英文临时模式里，或按 engine 判定此次 "." 会转入英文模式时，
 // 把 "." 放行给 InputSession 处理。
 bool IsPeriodEnglishInput()
 {
-    if (g_inputSession == nullptr)
-    {
-        return false;
-    }
-    if (g_inputSession->local_input_mode() == LocalInputMode::TemporaryEnglish)
-    {
-        return true;
-    }
-    return g_inputSession->symbol_continues_english_input();
+    return g_inputSession != nullptr && g_inputSession->period_is_english_input();
 }
 
 bool IsCommitWithHighlightedCandidatePunctuationInCandidateMode(UINT keycode, WCHAR wch)
