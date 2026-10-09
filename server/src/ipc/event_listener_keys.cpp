@@ -270,10 +270,16 @@ bool IsCandidateNavigationKey(UINT keycode)
     {
         return false;
     }
-    // 定制版（2026-10-09）："," "." 不再作为候选窗导航键，
-    // 交给 engine 的 handle_punctuation 处理（有候选时一律进英文）。
-    return keycode == VK_OEM_MINUS || keycode == VK_OEM_PLUS || keycode == VK_OEM_4 || keycode == VK_OEM_6 ||
-           keycode == VK_TAB || keycode == VK_PRIOR || keycode == VK_NEXT || keycode == VK_UP || keycode == VK_DOWN;
+    // 定制版: "," "." 不再视为候选导航键, 由 engine 的 handle_punctuation
+    // 统一处理 (有候选时一律进英文临时模式)。
+    const bool is_comma_period = keycode == VK_OEM_COMMA || keycode == VK_OEM_PERIOD;
+    if (is_comma_period && !GetConfiguredPagingCommaPeriodEnabled())
+    {
+        return false;
+    }
+    return keycode == VK_OEM_MINUS || keycode == VK_OEM_PLUS || keycode == VK_OEM_COMMA || keycode == VK_OEM_PERIOD ||
+           keycode == VK_OEM_4 || keycode == VK_OEM_6 || keycode == VK_TAB || keycode == VK_PRIOR ||
+           keycode == VK_NEXT || keycode == VK_UP || keycode == VK_DOWN;
 }
 
 bool ApplyCompositionEditKey(UINT keycode, WCHAR wch, UINT modifiers_down, bool client_supports_restore,
