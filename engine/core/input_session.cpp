@@ -297,9 +297,11 @@ KeyResult InputSession::handle_punctuation(char character)
         {
             reset_composition();
             local_input_mode_ = LocalInputMode::TemporaryEnglish;
-            // 不用 "Y" 前缀，直接放英文内容，避免候选查询异常。
+            // 不用 "Y" 前缀，直接放英文内容；先不清候选查询，避免异常。
+            // 模仿 Shift+Y 流程：先设 preedit 为空候选，靠后续按键驱动。
             local_preedit_ = raw_letters + character;
-            return {true, std::nullopt, update_local_candidates()};
+            local_candidates_.clear();
+            return {true, std::nullopt, std::nullopt};
         }
     }
     }
