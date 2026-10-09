@@ -55,6 +55,22 @@ bool IsJapaneseDisabledPagingKey(UINT keycode)
     return (keycode == VK_OEM_MINUS || keycode == VK_OEM_PLUS) && IsJapaneseInputMode();
 }
 
+// "." 在中文模式下输入英文网址/邮箱时是正文的一部分（如 "aaaa.com"），不应触发翻页：
+// 已在英文临时模式里，或按 symbol_continues_english_input 判定此次 "." 会转入英文模式时，
+// 把 "." 放行给 InputSession 处理。
+bool IsPeriodEnglishInput()
+{
+    if (g_inputSession == nullptr)
+    {
+        return false;
+    }
+    if (g_inputSession->local_input_mode() == LocalInputMode::TemporaryEnglish)
+    {
+        return true;
+    }
+    return g_inputSession->symbol_continues_english_input();
+}
+
 bool IsCommitWithHighlightedCandidatePunctuationInCandidateMode(UINT keycode, WCHAR wch)
 {
     if (keycode == VK_TAB)
@@ -1535,7 +1551,7 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
         {
             move_page(-1, Global::DataFromServerMsgType::MovePagePrevious);
         }
-        else if (Global::Keycode == VK_OEM_PERIOD && GetConfiguredPagingCommaPeriodEnabled())
+        else if (Global::Keycode == VK_OEM_PERIOD && GetConfiguredPagingCommaPeriodEnabled() && !IsPeriodEnglishInput())
         {
             move_page(1, Global::DataFromServerMsgType::MovePageNext);
         }

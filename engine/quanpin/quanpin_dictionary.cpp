@@ -714,25 +714,15 @@ std::vector<WordItem> QuanpinDictionary::query_exact(const std::string &raw_inpu
     }
     // 部分拼音置顶：它是用户的明确意图（"zhge" 就是 "zhege" 的缩写），不是"备选读音"。
     // 备选合并按原始权重排序，单字（1e6+ 量级）天然压住双字词（"这个" 503750），导致
-    // 部分拼音的最佳词埋没在单字堆里。这里把最佳部分拼音词直接移到首位（若已在前3则不动，
-    // 避免打乱用户调频的结果）。
-    if (!partial_pinyin_cuts.empty() && result.size() > 3)
+    // 部分拼音的最佳词埋没在单字堆里。这里把最佳部分拼音词直接移到首位（词优先于单字）。
+    if (!partial_pinyin_cuts.empty() && result.size() > 1)
     {
         const auto partial_items =
             quanpin::query_exact_segmentations_keyed_flat(partial_pinyin_cuts, db_, statement_cache_, 1);
         if (!partial_items.empty())
         {
             const std::string &target_word = partial_items.front().value;
-            bool already_top = false;
-            for (size_t i = 0; i < 3 && i < result.size(); ++i)
-            {
-                if (result[i].word == target_word)
-                {
-                    already_top = true;
-                    break;
-                }
-            }
-            if (!already_top)
+            if (result.front().word != target_word)
             {
                 auto it = std::find_if(result.begin(), result.end(),
                                        [&](const WordItem &item) { return item.word == target_word; });
