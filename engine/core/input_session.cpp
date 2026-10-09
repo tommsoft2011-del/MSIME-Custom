@@ -297,7 +297,8 @@ KeyResult InputSession::handle_punctuation(char character)
         {
             reset_composition();
             local_input_mode_ = LocalInputMode::TemporaryEnglish;
-            local_preedit_ = "Y" + raw_letters + character;
+            // 不用 "Y" 前缀，直接放英文内容，避免候选查询异常。
+            local_preedit_ = raw_letters + character;
             return {true, std::nullopt, update_local_candidates()};
         }
     }
