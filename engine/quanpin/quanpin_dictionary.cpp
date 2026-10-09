@@ -472,7 +472,7 @@ std::vector<WordItem> QuanpinDictionary::query_exact(const std::string &raw_inpu
     // （"这个" 503750），而部分拼音是用户的明确意图不是"备选读音"，最佳词要在
     // 函数末尾单独置顶（见 query_exact 末尾）。
     std::vector<quanpin::Segments> partial_pinyin_cuts;
-    for (const auto &candidate : quanpin::cut_pinyin_with_partial_pinyin(raw_input))
+    for (const auto &candidate : quanpin::cut_pinyin_with_partial_pinyin(raw_input, 1))
     {
         const std::string key = quanpin::join_segments(candidate);
         if (key.empty() || !seen_segmentations.insert(key).second)

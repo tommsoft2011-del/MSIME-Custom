@@ -100,9 +100,12 @@ const CorrectionAliases &pinyin_correction_aliases()
 // 的"部分拼音"输入法，不是手误纠正。
 // 同一个前缀的候选按"少丢字母优先"（音节长度升序）排列，同长度按字母序，保证
 // k-best 截断时先留下最可能的读法。
-const CorrectionAliases &partial_pinyin_aliases()
+// min_prefix_len=1 时单字母也收录（如 "g"->"ge"），用于候选生成（"zhg"->"zhe"+"ge"）；
+// min_prefix_len=2（默认）时只收 ≥2 字母前缀，用于英文判定，避免 "abc" 这类纯单字母
+// 串被误判为拼音。
+const CorrectionAliases &partial_pinyin_aliases(size_t min_prefix_len = 2)
 {
-    static const CorrectionAliases kAliases = [] {
+    static const CorrectionAliases kAliases2 = [] {
         const auto &valid_pinyin = intact_pinyin_set();
         std::map<std::string, std::vector<std::string>> by_prefix;
         for (const auto &syllable : intact_pinyin_list())
@@ -130,7 +133,35 @@ const CorrectionAliases &partial_pinyin_aliases()
         }
         return aliases;
     }();
-    return kAliases;
+    static const CorrectionAliases kAliases1 = [] {
+        const auto &valid_pinyin = intact_pinyin_set();
+        std::map<std::string, std::vector<std::string>> by_prefix;
+        for (const auto &syllable : intact_pinyin_list())
+        {
+            for (size_t len = 1; len < syllable.size(); ++len)
+            {
+                const std::string prefix = syllable.substr(0, len);
+                if (valid_pinyin.find(prefix) != valid_pinyin.end())
+                {
+                    continue;
+                }
+                auto &targets = by_prefix[prefix];
+                if (std::find(targets.begin(), targets.end(), syllable) == targets.end())
+                {
+                    targets.push_back(syllable);
+                }
+            }
+        }
+        CorrectionAliases aliases;
+        for (auto &[prefix, targets] : by_prefix)
+        {
+            std::stable_sort(targets.begin(), targets.end(),
+                             [](const std::string &lhs, const std::string &rhs) { return lhs.size() < rhs.size(); });
+            aliases.emplace(prefix, std::move(targets));
+        }
+        return aliases;
+    }();
+    return min_prefix_len <= 1 ? kAliases1 : kAliases2;
 }
 
 std::vector<Segments> cut_one_piece_with_aliases(const std::string &pinyin, const CorrectionAliases &aliases)
@@ -242,9 +273,9 @@ std::vector<Segments> cut_one_piece_with_corrections(const std::string &pinyin)
     return cut_one_piece_with_aliases(pinyin, pinyin_correction_aliases());
 }
 
-std::vector<Segments> cut_one_piece_with_partial_pinyin(const std::string &pinyin)
+std::vector<Segments> cut_one_piece_with_partial_pinyin(const std::string &pinyin, size_t min_prefix_len)
 {
-    return cut_one_piece_with_aliases(pinyin, partial_pinyin_aliases());
+    return cut_one_piece_with_aliases(pinyin, partial_pinyin_aliases(min_prefix_len));
 }
 
 std::vector<Segments> cut_pinyin_with_piece_cutter(
@@ -1027,9 +1058,11 @@ std::vector<Segments> cut_pinyin_by_mode(const std::string &pinyin, const std::s
     return {};
 }
 
-std::vector<Segments> cut_pinyin_with_partial_pinyin(const std::string &pinyin)
+std::vector<Segments> cut_pinyin_with_partial_pinyin(const std::string &pinyin, size_t min_prefix_len)
 {
-    return cut_pinyin_with_piece_cutter(pinyin, cut_one_piece_with_partial_pinyin);
+    return cut_pinyin_with_piece_cutter(pinyin, [min_prefix_len](const std::string &piece) {
+        return cut_one_piece_with_partial_pinyin(piece, min_prefix_len);
+    });
 }
 
 Segments split_segments(const std::string &segmentation)

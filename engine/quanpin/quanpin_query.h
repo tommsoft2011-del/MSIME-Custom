@@ -49,7 +49,9 @@ std::vector<Segments> cut_pinyin_by_mode(const std::string &pinyin, const std::s
 // 部分拼音切分：允许不完整音节前缀（如 "zhge" -> "zhe"+"ge"）。与纠错别名不同，
 // 它不受纠错开关门控——这是输入法承诺兼容的输入方式，不是手误纠正。返回的路径
 // 按（音节数、已敲长度、别名序号）排序，精确匹配永远排在别名之前。
-std::vector<Segments> cut_pinyin_with_partial_pinyin(const std::string &pinyin);
+// min_prefix_len=1 时单字母前缀也参与（如 "zhg" -> "zhe"+"ge"），用于候选生成；
+// =2（默认）时只用 ≥2 字母前缀，用于英文输入判定，避免 "abc" 被误判为拼音。
+std::vector<Segments> cut_pinyin_with_partial_pinyin(const std::string &pinyin, size_t min_prefix_len = 2);
 Segments split_segments(const std::string &segmentation);
 std::string join_segments(const Segments &segments, const std::string &delimiter = "'");
 std::string build_table_name(const Segments &segments);
