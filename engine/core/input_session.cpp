@@ -3,6 +3,7 @@
 #include "../common/helpcode_utils.h"
 #include "../contracts/date_time_input.h"
 #include "../contracts/direct_helpcode.h"
+#include "../contracts/url_english_input.h"
 #include "../local_modes/date_time_query.h"
 #include "../local_modes/emoji_query.h"
 #include "../local_modes/jianpin_query.h"
@@ -280,30 +281,6 @@ KeyResult InputSession::handle_punctuation(char character)
             update_dedicated_english_candidates();
             return {true, std::nullopt, std::nullopt};
         }
-    // User (2026-10-09): with pinyin candidates, "." and "@" always enter
-    // temporary English mode. No smart detection.
-    if ((character == '.' || character == '@') && has_composition() &&
-        local_input_mode_ == LocalInputMode::None && !dedicated_english_mode_ &&
-        scheme() == SchemeType::Quanpin)
-    {
-        const std::string raw_letters = engine_.get_request().raw_input;
-        if (character == '.' ||
-            (character == '@' && !raw_letters.empty() &&
-             std::all_of(raw_letters.begin(), raw_letters.end(),
-                         [](char c) { return c >= 'a' && c <= 'z'; })))
-        {
-            // Commit "aaa." directly so user sees it. Enter TemporaryEnglish
-            // mode for subsequent input (e.g. "com" -> "aaa.com").
-            reset_composition();
-            local_input_mode_ = LocalInputMode::TemporaryEnglish;
-            local_preedit_.clear();
-            local_candidates_.clear();
-            KeyResult result;
-            result.handled = true;
-            result.commit = raw_letters + character;
-            return result;
-        }
-    }
     }
 
     if (!chinese_punctuation_enabled_)
@@ -1195,29 +1172,49 @@ std::size_t InputSession::quantized_prefix_end() const
     return *std::prev(std::upper_bound(boundaries.begin(), boundaries.end(), caret_position()));
 }
 
+std::optional<std::size_t> InputSession::url_symbol_prefix_end() const
+{
+    // 定制版（2026-10-10）：中文全拼/双拼里敲进了网址符号（"nihao."、"aaa.com"），候选只由第一个
+    // 网址符号之前的部分产生，当作一个固定的"光标前缀"；符号及之后的部分是待定后缀，回车时随整串原样上屏。
+    if (dedicated_english_mode_ || local_input_mode_ != LocalInputMode::None ||
+        (scheme() != SchemeType::Quanpin && scheme() != SchemeType::Shuangpin))
+    {
+        return std::nullopt;
+    }
+    const std::string &raw = get_pinyin_sequence_with_cases();
+    if (!FanyImeUrlEnglishInput::IsComposition(raw.data(), raw.size()))
+    {
+        return std::nullopt;
+    }
+    return FanyImeUrlEnglishInput::FirstUrlSymbol(raw.data(), raw.size());
+}
+
 std::size_t InputSession::prefix_end() const
 {
-    return quantized_prefix_end();
+    const std::size_t end = quantized_prefix_end();
+    const auto url_end = url_symbol_prefix_end();
+    return url_end ? std::min(end, *url_end) : end;
 }
 
 std::string InputSession::pending_suffix() const
 {
     const std::string &raw = get_pinyin_sequence_with_cases();
-    const std::size_t end = quantized_prefix_end();
+    const std::size_t end = prefix_end();
     return end < raw.size() ? raw.substr(end) : std::string{};
 }
 
 void InputSession::refresh_prefix_candidates()
 {
     prefix_candidates_active_ = false;
-    if (!caret_.has_value() || dedicated_english_mode_ || local_input_mode_ != LocalInputMode::None)
+    const bool url_prefix = url_symbol_prefix_end().has_value();
+    if ((!caret_.has_value() && !url_prefix) || dedicated_english_mode_ || local_input_mode_ != LocalInputMode::None)
     {
         prefix_candidates_.clear();
         prefix_query_input_.clear();
         return;
     }
     const std::string &raw_with_cases = get_pinyin_sequence_with_cases();
-    const std::size_t end = quantized_prefix_end();
+    const std::size_t end = prefix_end();
     if (end >= raw_with_cases.size())
     {
         // The caret sits on the final boundary or the scheme has no unit model: the full-string
