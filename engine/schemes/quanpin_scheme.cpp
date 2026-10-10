@@ -56,6 +56,20 @@ void QuanpinScheme::handle_key(ImeKeyCode vk, ImeModifierMask modifiers_down, Im
         return;
     }
 
+    // 纯英文标点：. @ - _ / :，按 engine/contracts/url_english_input.h 规则收进 raw。
+    // 必须在 is_alpha_vk 判断之前，否则会被直接丢掉。
+    // 用户规则：串里出现标点就按纯英文算，不再管备选词，回车整串上屏。
+    if (wch == L'.' || wch == L'@' || wch == L'-' || wch == L'_' || wch == L'/' || wch == L':')
+    {
+        // 只要 raw 非空就收下，Server 侧已用同一规则做过前置判断。
+        if (!raw_input_.empty())
+        {
+            key_strokes_.push_back(KeyStroke{vk, modifiers_down, wch});
+            raw_input_.push_back(static_cast<char>(wch));
+        }
+        return;
+    }
+
     if (!is_alpha_vk(vk))
     {
         return;
