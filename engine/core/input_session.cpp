@@ -280,16 +280,13 @@ KeyResult InputSession::handle_punctuation(char character)
             update_dedicated_english_candidates();
             return {true, std::nullopt, std::nullopt};
         }
-    // 用户要求（2026-10-09）：中文模式下有拼音候选时，"." "@" 一律进英文临时模式，
-    // 不做"智能分辨"——aaa→啊啊啊 和 nihao→你好 无法可靠区分，硬分辨只会两头不讨好。
-    // 无候选时 "." 仍走下面的中文标点 "。"。
+    // User (2026-10-09): with pinyin candidates, "." and "@" always enter
+    // temporary English mode. No smart detection.
     if ((character == '.' || character == '@') && has_composition() &&
         local_input_mode_ == LocalInputMode::None && !dedicated_english_mode_ &&
         scheme() == SchemeType::Quanpin)
     {
         const std::string raw_letters = engine_.get_request().raw_input;
-        // 只有纯小写字母才转英文，避免中文标点误触（如 "nihao," 的 "," 不应转）。
-        // 但 "." 按用户要求一律转（用户明确不要 nihao.→你好。）。
         if (character == '.' ||
             (character == '@' && !raw_letters.empty() &&
              std::all_of(raw_letters.begin(), raw_letters.end(),
@@ -297,8 +294,8 @@ KeyResult InputSession::handle_punctuation(char character)
         {
             reset_composition();
             local_input_mode_ = LocalInputMode::TemporaryEnglish;
-            // 不用 "Y" 前缀，直接放英文内容；先不清候选查询，避免异常。
-            // 模仿 Shift+Y 流程：先设 preedit 为空候选，靠后续按键驱动。
+            // No "Y" prefix; set English content directly. Clear candidates
+            // and return like Shift+Y flow, avoiding candidate query issues.
             local_preedit_ = raw_letters + character;
             local_candidates_.clear();
             return {true, std::nullopt, std::nullopt};
@@ -308,7 +305,14 @@ KeyResult InputSession::handle_punctuation(char character)
 
     if (!chinese_punctuation_enabled_)
     {
-        return {};
+        // "Always use English punctuation": commit the ASCII character directly.
+        // Previously returned {} which dropped the key.
+        KeyResult result = finish_composition();
+        result.handled = true;
+        std::string text = result.commit.value_or("");
+        text += character;
+        result.commit = std::move(text);
+        return result;
     }
 
     const auto punctuation = punctuation_.translate(character);
