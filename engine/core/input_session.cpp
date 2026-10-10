@@ -292,27 +292,23 @@ KeyResult InputSession::handle_punctuation(char character)
              std::all_of(raw_letters.begin(), raw_letters.end(),
                          [](char c) { return c >= 'a' && c <= 'z'; })))
         {
+            // Commit "aaa." directly so user sees it. Enter TemporaryEnglish
+            // mode for subsequent input (e.g. "com" -> "aaa.com").
             reset_composition();
             local_input_mode_ = LocalInputMode::TemporaryEnglish;
-            // No "Y" prefix; set English content directly. Clear candidates
-            // and return like Shift+Y flow, avoiding candidate query issues.
-            local_preedit_ = raw_letters + character;
+            local_preedit_.clear();
             local_candidates_.clear();
-            return {true, std::nullopt, std::nullopt};
+            KeyResult result;
+            result.handled = true;
+            result.commit = raw_letters + character;
+            return result;
         }
     }
     }
 
     if (!chinese_punctuation_enabled_)
     {
-        // "Always use English punctuation": commit the ASCII character directly.
-        // Previously returned {} which dropped the key.
-        KeyResult result = finish_composition();
-        result.handled = true;
-        std::string text = result.commit.value_or("");
-        text += character;
-        result.commit = std::move(text);
-        return result;
+        return {};
     }
 
     const auto punctuation = punctuation_.translate(character);
