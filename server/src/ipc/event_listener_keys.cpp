@@ -115,8 +115,7 @@ bool IsCommitWithHighlightedCandidatePunctuationInCandidateMode(UINT keycode, WC
         L'"',  //
         L',',  //
         L'<',  //
-        // 定制版（2026-10-09）："." 永不上屏，交给 engine 的 handle_punctuation
-        // 统一处理（有候选时一律进英文）。"," 保持原有上屏行为。
+        L'.',  // 定制版: "." 有候选时走英文模式, 在提交分支特殊处理, 不直接上屏中文+句号.
         L'>',  //
         L'?'   //
     };
@@ -1051,6 +1050,25 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
             ensure_punct.Stop();
             auto &ui = Global::candidate_ui;
             ui.selected_text = FanyImeIpc::HighlightedCandidateText(ui.page_words, ui.selected_index_in_page);
+
+            // Custom (2026-10-10): "." with composition commits raw pinyin + "."
+            // as English, not the highlighted Chinese candidate. This is the
+            // user's "one-size-fits-all" rule: aaa. and nihao. both go English.
+            if (Global::Keycode == VK_OEM_PERIOD && Global::Wch == L'.' &&
+                !GetConfiguredPagingCommaPeriodEnabled() && g_inputSession != nullptr)
+            {
+                const std::string raw = g_inputSession->get_pinyin_sequence_with_cases();
+                if (!raw.empty())
+                {
+                    ui.selected_text = string_to_wstring(raw + ".");
+                    // Skip the date-time and word/character special cases below;
+                    // we are committing raw English, not a candidate.
+                    SendCurrentDataToClient(client_id, activation_epoch, request_id);
+                    // Clear composition and enter English mode for subsequent input.
+                    // (English mode flag handling TBD - for now just commit.)
+                    return;
+                }
+            }
 
             WordItem highlighted_item;
             const bool highlighted_resolved = ResolveCandidateItem(ui.selected_index_in_page + 1, highlighted_item);
