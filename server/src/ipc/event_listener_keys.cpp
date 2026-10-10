@@ -13,6 +13,7 @@
 #include "engine/contracts/direct_helpcode.h"
 #include "engine/contracts/ipc_negotiation.h"
 #include "engine/contracts/mid_sentence_helpcode.h"
+#include "engine/contracts/url_english_input.h"
 #include "defines/defines.h"
 #include "defines/globals.h"
 #include "utils/common_utils.h"
@@ -115,7 +116,7 @@ bool IsCommitWithHighlightedCandidatePunctuationInCandidateMode(UINT keycode, WC
         L'"',  //
         L',',  //
         L'<',  //
-        L'.',  // 定制版: "." 有候选时走英文模式, 在提交分支特殊处理, 不直接上屏中文+句号.
+        L'.',  //
         L'>',  //
         L'?'   //
     };
@@ -199,6 +200,46 @@ bool IsVModeInputKey(WCHAR wch, const std::string &raw_input)
                              : (std::min)(composition.caret_position, raw_input.size());
     return FanyImeVModeInput::AcceptsAt(raw_input.data(), raw_input.size(), caret, static_cast<char>(wch),
                                         CurrentVModeTrigger());
+}
+
+// 定制版（2026-10-10）：中文全拼/双拼里连续输入网址 / 英文串（aaa.com、nihao.、test@example.com）。
+// "." "@" 以及之后的 "- _ / :" 是编码键：进输入串，不当标点上屏、不翻页、不做词转字。候选只由第一个
+// 网址符号之前的部分产生（引擎把它当光标前缀），回车按 TSF 的按键缓冲上屏整串原文。
+// 规则在 engine/contracts/url_english_input.h，TSF 按同一条规则预判吃键。开了逗号句号翻页时 "." 仍翻页。
+bool IsUrlEnglishInputKey(WCHAR wch, const std::string &raw_input)
+{
+    // 不排除专用英文模式：TSF 只知道方案（VModeChanged 第二位），两边条件必须一致，否则输入串会分叉。
+    if (wch > 0x7f || g_inputSession == nullptr || g_r_mode_triggered)
+    {
+        return false;
+    }
+    const SchemeType scheme = g_inputSession->current_scheme_type();
+    if (scheme != SchemeType::Quanpin && scheme != SchemeType::Shuangpin)
+    {
+        return false;
+    }
+    if (wch == L'.' && GetConfiguredPagingCommaPeriodEnabled())
+    {
+        return false;
+    }
+    if (IsSpecialModeCompositionActive(raw_input))
+    {
+        return false;
+    }
+    const auto &composition = GlobalIme::composition;
+    const size_t caret = composition.raw_input_with_cases != raw_input && composition.caret_position == 0
+                             ? raw_input.size()
+                             : (std::min)(composition.caret_position, raw_input.size());
+    return FanyImeUrlEnglishInput::AcceptsAt(raw_input.data(), raw_input.size(), caret, static_cast<char>(wch));
+}
+
+bool IsUrlEnglishComposition(const std::string &raw_input)
+{
+    return g_inputSession != nullptr && !g_english_input_mode && !g_r_mode_triggered &&
+           (g_inputSession->current_scheme_type() == SchemeType::Quanpin ||
+            g_inputSession->current_scheme_type() == SchemeType::Shuangpin) &&
+           !IsSpecialModeCompositionActive(raw_input) &&
+           FanyImeUrlEnglishInput::IsComposition(raw_input.data(), raw_input.size());
 }
 
 bool IsMicrosoftShuangpinIngKey(UINT keycode, WCHAR wch, const std::string &raw_input)
@@ -469,7 +510,8 @@ bool ApplyCompositionEditKey(UINT keycode, WCHAR wch, UINT modifiers_down, bool 
         {
             input = '-';
         }
-        else if (IsDateTimeInputKey(keycode, wch, raw) || IsVModeInputKey(wch, raw))
+        else if (IsDateTimeInputKey(keycode, wch, raw) || IsVModeInputKey(wch, raw) ||
+                 IsUrlEnglishInputKey(wch, raw))
         {
             input = static_cast<char>(wch);
         }
@@ -931,7 +973,9 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
         // V 模式没有触发标记，按输入串认：回车上屏的 V123 不是要学的英文词。
         const bool shift_letter_special_mode =
             IsShiftLetterSpecialModeTriggered() || IsVModeCompositionActive(input_before_key);
-        if (FanyImeIpc::ShouldLearnEnteredEnglishWord(g_english_input_mode, shift_letter_special_mode, chinese_scheme,
+        // 定制版：带网址符号的整串（aaa.com、nihao.）不是英文单词，不学。
+        if (!IsUrlEnglishComposition(input_before_key) &&
+            FanyImeIpc::ShouldLearnEnteredEnglishWord(g_english_input_mode, shift_letter_special_mode, chinese_scheme,
                                                       g_inputSession->is_all_complete_pure_pinyin()))
             english_word = g_r_mode_triggered ? "R" + input_before_key : input_before_key;
         EnqueueLearnEnteredEnglishWordTask(english_word);
@@ -995,7 +1039,9 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
     }
 
     const bool unicode_composition_active = IsUnicodeCompositionActive(input_before_key);
-    const bool is_paging_key = IsPagingKey(Global::Keycode);
+    // 定制版：网址 / 英文串里的 . @ - _ / : 是编码键（见 IsUrlEnglishInputKey），不翻页、不当标点。
+    const bool is_url_english_input_key = IsUrlEnglishInputKey(Global::Wch, input_before_key);
+    const bool is_paging_key = IsPagingKey(Global::Keycode) && !is_url_english_input_key;
     const bool is_manual_pinyin_separator = IsManualPinyinSeparatorKey(Global::Keycode, Global::Wch);
     const bool is_microsoft_shuangpin_ing_key =
         IsMicrosoftShuangpinIngKey(Global::Keycode, Global::Wch, input_before_key);
@@ -1013,13 +1059,14 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
     const bool is_japanese_long_vowel = IsJapaneseLongVowelKey(Global::Keycode, Global::Wch);
     const int word_character_direction = FanyImeIpc::WordToCharacterDirection(
         Global::Keycode, Global::Wch, Global::ModifiersDown,
-        GetConfiguredWordToCharacterEnabled() && !is_japanese_long_vowel && !is_v_mode_input_key,
+        GetConfiguredWordToCharacterEnabled() && !is_japanese_long_vowel && !is_v_mode_input_key &&
+            !is_url_english_input_key,
         GetConfiguredWordToCharacterKeys() == "minus_equal");
     const bool is_commit_with_highlighted_candidate_punctuation =
         word_character_direction != 0 ||
         (!is_manual_pinyin_separator && !is_microsoft_shuangpin_ing_key && !is_mid_sentence_helpcode_marker &&
          !is_direct_helpcode_slash && !is_date_time_input_key && !is_v_mode_input_key &&
-         !is_v_mode_shift_digit_selection &&
+         !is_v_mode_shift_digit_selection && !is_url_english_input_key &&
          IsCommitWithHighlightedCandidatePunctuationInCandidateMode(Global::Keycode, Global::Wch));
     const bool is_selection_key = IsSelectionKey(Global::Keycode);
     const bool is_unicode_shift_digit_selection =
@@ -1032,7 +1079,7 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
         Global::Keycode == VK_DELETE || (Global::Keycode >= 'A' && Global::Keycode <= 'Z') ||
         is_manual_pinyin_separator || is_microsoft_shuangpin_ing_key || is_mid_sentence_helpcode_marker ||
         is_direct_helpcode_slash || is_unicode_hex_digit || is_unicode_plus || is_japanese_long_vowel ||
-        is_date_time_input_key || is_v_mode_input_key;
+        is_date_time_input_key || is_v_mode_input_key || is_url_english_input_key;
     const bool should_forward_key_to_session = !is_commit_with_highlighted_candidate_punctuation && !is_selection_key &&
                                                !is_paging_key && !is_composition_edit_key;
 
@@ -1050,25 +1097,6 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
             ensure_punct.Stop();
             auto &ui = Global::candidate_ui;
             ui.selected_text = FanyImeIpc::HighlightedCandidateText(ui.page_words, ui.selected_index_in_page);
-
-            // Custom (2026-10-10): "." with composition commits raw pinyin + "."
-            // as English, not the highlighted Chinese candidate. This is the
-            // user's "one-size-fits-all" rule: aaa. and nihao. both go English.
-            if (Global::Keycode == VK_OEM_PERIOD && Global::Wch == L'.' &&
-                !GetConfiguredPagingCommaPeriodEnabled() && g_inputSession != nullptr)
-            {
-                const std::string raw = g_inputSession->get_pinyin_sequence_with_cases();
-                if (!raw.empty())
-                {
-                    ui.selected_text = string_to_wstring(raw + ".");
-                    // Skip the date-time and word/character special cases below;
-                    // we are committing raw English, not a candidate.
-                    SendCurrentDataToClient(client_id, activation_epoch, request_id);
-                    // Clear composition and enter English mode for subsequent input.
-                    // (English mode flag handling TBD - for now just commit.)
-                    return;
-                }
-            }
 
             WordItem highlighted_item;
             const bool highlighted_resolved = ResolveCandidateItem(ui.selected_index_in_page + 1, highlighted_item);
@@ -1188,6 +1216,11 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
     if (!g_english_input_mode && IsVModeCompositionActive(GlobalIme::composition.raw_input_with_cases))
     {
         // Keep preedit identical to the typed V-prefixed number or expression.
+        GlobalIme::composition.segmented_pinyin = GlobalIme::composition.raw_input_with_cases;
+    }
+    if (IsUrlEnglishComposition(GlobalIme::composition.raw_input_with_cases))
+    {
+        // 定制版：网址 / 英文串原样显示（不按拼音切分），和回车上屏的内容一致。
         GlobalIme::composition.segmented_pinyin = GlobalIme::composition.raw_input_with_cases;
     }
     SyncShuangpinPreeditForms();
@@ -1374,7 +1407,8 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
     if (FanyImeIpc::ShouldSendCompositionReply(Global::Keycode >= 'A' && Global::Keycode <= 'Z',
                                                is_manual_pinyin_separator, is_microsoft_shuangpin_ing_key,
                                                is_unicode_hex_digit, is_unicode_plus, is_japanese_long_vowel,
-                                               is_date_time_input_key || is_v_mode_input_key))
+                                               is_date_time_input_key || is_v_mode_input_key ||
+                                                   is_url_english_input_key))
     {
         if (IsUiLessMode())
         {
@@ -1525,7 +1559,8 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
             }
         }
     }
-    else if (IsCandidateNavigationKey(Global::Keycode) && !is_unicode_plus && !is_v_mode_input_key)
+    else if (IsCandidateNavigationKey(Global::Keycode) && !is_unicode_plus && !is_v_mode_input_key &&
+             !is_url_english_input_key)
     {
         auto &ui = Global::candidate_ui;
         UINT result = Global::DataFromServerMsgType::NavigationIgnored;
