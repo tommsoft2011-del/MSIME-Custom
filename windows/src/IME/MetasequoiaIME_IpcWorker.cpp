@@ -436,8 +436,11 @@ void CMetasequoiaIME::IpcWorkerThread(CMetasequoiaIME *pIME)
                     break;
                 }
             }
+            // 定制版：VModeChanged 可以带第二位（"0"/"1"，当前是否全拼/双拼，供网址 / 英文串输入使用）。
+            const bool vModeWithSchemeFlag = buf.msg_type == Global::DataToTsfWorkerThreadMsgType::VModeChanged &&
+                                             (buf.data[1] == L'0' || buf.data[1] == L'1') && buf.data[2] == L'\0';
             validFrame = hasTerminator && (buf.data[0] == L'0' || buf.data[0] == L'1' || buf.data[0] == L'2') &&
-                         buf.data[1] == L'\0';
+                         (buf.data[1] == L'\0' || vModeWithSchemeFlag);
         }
         if (validFrame && buf.msg_type == Global::DataToTsfWorkerThreadMsgType::DirectHelpcodeChanged)
         {
@@ -640,6 +643,7 @@ void CMetasequoiaIME::IpcWorkerThread(CMetasequoiaIME *pIME)
         else if (buf.msg_type == Global::DataToTsfWorkerThreadMsgType::VModeChanged)
         {
             Global::VModeTrigger.store(FanyImeVModeInput::TriggerFromPayload(buf.data[0]), std::memory_order_relaxed);
+            Global::UrlEnglishInputEnabled.store(buf.data[1] == L'1', std::memory_order_relaxed);
         }
         else if (buf.msg_type == Global::DataToTsfWorkerThreadMsgType::InputModeChanged)
         {
