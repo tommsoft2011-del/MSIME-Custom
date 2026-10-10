@@ -23,6 +23,7 @@
 #include "../Utils/PerfTimer.h"
 #include <chrono>
 #include "../../../engine/contracts/ipc_negotiation.h"
+#include "../../../engine/contracts/url_english_input.h"
 #include "KeyEventSinkInternal.h"
 
 using namespace key_event_sink_detail;
@@ -1215,10 +1216,23 @@ CMetasequoiaIME::KeyDownDispatchResult CMetasequoiaIME::_DispatchKeyDown(
         {
             PerfTimer asyncPuncTimer;
             std::wstring punctuationCommitText;
+            const std::wstring rawComposition = _pCompositionProcessorEngine->GetKeystrokeBuffer().ToWString();
+            const bool isUrlEnglishCompositionPunctuation =
+                FanyImeUrlEnglishInput::ShouldPreservePunctuationInComposition(
+                    SupportsUrlEnglishCompositionEdit(), _IsComposing() != FALSE, rawComposition.data(),
+                    rawComposition.size(), static_cast<wchar_t>(wch));
             const bool shouldFinalizeHighlightedCandidateWithPunctuation =
                 _candidateMode != CANDIDATE_NONE && _pCandidateListUIPresenter &&
                 Global::CommitWithHighlightedCandPunc.count(wch) > 0;
-            if (shouldFinalizeHighlightedCandidateWithPunctuation)
+            if (isUrlEnglishCompositionPunctuation)
+            {
+                // Do not pre-map this punctuation (for example '.' -> '。'). An empty payload lets the
+                // edit session consume the Server's authoritative Preedit reply and keep the raw string.
+                DebugTsfIssue47(L"punctuation-url-english-edit", requestId, code, wch, KeystrokeState.Category,
+                                KeystrokeState.Function, 1, _IsComposing(),
+                                _pCompositionProcessorEngine->GetVirtualKeyLength(), S_OK, deferredReplayToken);
+            }
+            else if (shouldFinalizeHighlightedCandidateWithPunctuation)
             {
                 // Empty means the edit session must consume this request's
                 // candidate reply and append the punctuation derived from wch

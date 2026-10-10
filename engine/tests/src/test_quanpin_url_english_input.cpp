@@ -60,12 +60,48 @@ bool CheckSpecialPrefixDoesNotEnterEnglishMode()
     InputKey(scheme, 0xbe, u'.');
     return scheme.get_preedit() == "V";
 }
+
+bool CheckPunctuationPreservationPolicy()
+{
+    constexpr char lowercase_pinyin[] = "aaa";
+    for (int value = 0x21; value <= 0x7e; ++value)
+    {
+        const char punctuation = static_cast<char>(value);
+        if (!FanyImeUrlEnglishInput::IsEnglishPunctuation(punctuation))
+        {
+            continue;
+        }
+        if (!FanyImeUrlEnglishInput::ShouldPreservePunctuationInComposition(
+                true, true, lowercase_pinyin, sizeof(lowercase_pinyin) - 1, punctuation))
+        {
+            return false;
+        }
+        if (FanyImeUrlEnglishInput::ShouldPreservePunctuationInComposition(
+                false, true, lowercase_pinyin, sizeof(lowercase_pinyin) - 1, punctuation) ||
+            FanyImeUrlEnglishInput::ShouldPreservePunctuationInComposition(
+                true, false, lowercase_pinyin, sizeof(lowercase_pinyin) - 1, punctuation))
+        {
+            return false;
+        }
+    }
+
+    constexpr const char *special_prefixes[] = {"K", "U", "T", "E", "M", "J", "Y", "V", "v"};
+    for (const char *prefix : special_prefixes)
+    {
+        if (FanyImeUrlEnglishInput::ShouldPreservePunctuationInComposition(true, true, prefix, 1, '.'))
+        {
+            return false;
+        }
+    }
+    return true;
+}
 } // namespace
 
 int main()
 {
     if (!CheckLowercasePinyinTriggerAndContinuation() || !CheckUppercaseStartAcceptsDigitsAndPunctuation() ||
-        !CheckDigitsDoNotExtendUntriggeredLowercasePinyin() || !CheckSpecialPrefixDoesNotEnterEnglishMode())
+        !CheckDigitsDoNotExtendUntriggeredLowercasePinyin() || !CheckSpecialPrefixDoesNotEnterEnglishMode() ||
+        !CheckPunctuationPreservationPolicy())
     {
         std::cerr << "Quanpin URL English input regression failed\n";
         return 1;

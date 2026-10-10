@@ -1080,6 +1080,21 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
     const bool should_forward_key_to_session = !is_commit_with_highlighted_candidate_punctuation && !is_selection_key &&
                                                !is_paging_key && !is_composition_edit_key;
 
+    // Capture the live route for ASCII punctuation without recording the typed spelling.
+    if (!input_before_key.empty() && Global::Wch >= 0x21 && Global::Wch <= 0x7e &&
+        FanyImeUrlEnglishInput::IsEnglishPunctuation(static_cast<char>(Global::Wch)))
+    {
+        DIAG_LOGF(L"[url-english-trace] phase=server-decision request={} client={} keycode={} wch={} capability={} chinese_scheme={} raw_len={} first_special={} first_lower={} first_upper={} raw_has_punctuation={} english_mode={} r_mode={} url_key={} commit_candidate={}",
+                  request_id, client_id, Global::Keycode, static_cast<unsigned>(Global::Wch),
+                  client_supports_url_english_edit, chinese_scheme, input_before_key.size(),
+                  FanyImeUrlEnglishInput::IsSpecialModePrefix(input_before_key.front()),
+                  FanyImeUrlEnglishInput::IsLowerAsciiLetter(input_before_key.front()),
+                  FanyImeUrlEnglishInput::IsUpperAsciiLetter(input_before_key.front()),
+                  FanyImeUrlEnglishInput::HasEnglishPunctuation(input_before_key.data(), input_before_key.size()),
+                  g_english_input_mode, g_r_mode_triggered, is_url_english_input_key,
+                  is_commit_with_highlighted_candidate_punctuation);
+    }
+
     // Punctuation needs a synchronous highlighted-candidate response on the TSF pipe.
     // Reply before cloud-query and candidate recomputation work so the TSF-side
     // timeout sentinel keeps its original meaning instead of masking latency here.

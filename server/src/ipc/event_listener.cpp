@@ -30,6 +30,7 @@
 #include "config/ime_config.h"
 #include "engine/contracts/date_time_input.h"
 #include "engine/contracts/v_mode_input.h"
+#include "engine/contracts/url_english_input.h"
 #include "conversion/chinese_converter.h"
 #include "log/candidate_diag_log.h"
 #include "ipc/event_listener_internal.h"
@@ -653,6 +654,12 @@ void RegisterStatusSnapshotWindow(HWND toolbar_window)
 bool SendCurrentDataToClient(uint64_t client_id, uint64_t activation_epoch, uint64_t request_id)
 {
     const UINT msg_type = Global::MsgTypeToTsf;
+    if (Global::Wch >= 0x21 && Global::Wch <= 0x7e &&
+        FanyImeUrlEnglishInput::IsEnglishPunctuation(static_cast<char>(Global::Wch)))
+    {
+        DIAG_LOGF(L"[url-english-trace] phase=server-reply request={} client={} keycode={} wch={} msg_type={}",
+                  request_id, client_id, Global::Keycode, static_cast<unsigned>(Global::Wch), msg_type);
+    }
     FANY_IPC_LOGF(L"[msime]: [ipc] send-current-data: msg_type={}, text={}", msg_type,
                   ::Global::candidate_ui.selected_text);
     const ULONGLONG send_started_at_ms = GetTickCount64();

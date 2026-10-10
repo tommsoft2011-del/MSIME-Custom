@@ -92,4 +92,14 @@ template <typename Char> constexpr bool AcceptsChar(const Char *text, std::size_
     }
     return IsLowerAsciiLetter(text[0]) && IsEnglishPunctuation(ch);
 }
+
+// The TSF punctuation dispatcher must leave this key in the composition and
+// let the Server confirm the edit instead of pre-mapping it to Chinese punctuation.
+template <typename Char>
+constexpr bool ShouldPreservePunctuationInComposition(bool server_edit_capability, bool composing, const Char *text,
+                                                      std::size_t size, Char punctuation)
+{
+    return server_edit_capability && composing && IsEnglishPunctuation(punctuation) &&
+           AcceptsChar(text, size, punctuation);
+}
 } // namespace FanyImeUrlEnglishInput

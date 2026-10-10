@@ -732,6 +732,16 @@ LRESULT CALLBACK CMetasequoiaIME_WindowProc(HWND hWnd, UINT message, WPARAM wPar
         FanyImeNamedpipeDataToTsf *receivedData =
             navigationOnly ? TryReadDataFromServerPipeWithTimeout(request.requestId, /*abortTransportOnTimeout=*/false)
                            : TryReadCommitReplyFromServerPipe(request.requestId);
+        if ((code == VK_OEM_PERIOD || code == VK_OEM_COMMA) &&
+            Global::TsfDiagnosticLogEnabled.load(std::memory_order_relaxed))
+        {
+            QueueTsfDiagnosticLog(L"[url-english-trace] phase=tsf-reply request=" +
+                                  std::to_wstring(request.requestId) + L" code=" + std::to_wstring(code) +
+                                  L" wch=" + std::to_wstring(static_cast<unsigned>(wch)) +
+                                  L" capability=" + (SupportsUrlEnglishCompositionEdit() ? L"1" : L"0") +
+                                  L" msg_type=" +
+                                  std::to_wstring(static_cast<unsigned>(receivedData->msg_type)));
+        }
         if (receivedData->msg_type == Global::DataFromServerMsgType::TransportUnavailable)
         {
             // A transport failure is not text and must never be committed to

@@ -1490,6 +1490,13 @@ HRESULT CMetasequoiaIME::_HandleCompositionPunctuation(TfEditCookie ec, _In_ ITf
         if (Global::CommitWithHighlightedCandPunc.count(wch) > 0)
         {
             struct FanyImeNamedpipeDataToTsf *receivedData = TryReadCommitReplyFromServerPipe(requestId);
+            if ((code == VK_OEM_PERIOD || code == VK_OEM_COMMA) &&
+                Global::TsfDiagnosticLogEnabled.load(std::memory_order_relaxed))
+            {
+                QueueTsfDiagnosticLog(L"[url-english-trace] phase=tsf-punctuation-reply path=candidate request=" +
+                                      std::to_wstring(requestId) + L" msg_type=" +
+                                      std::to_wstring(static_cast<unsigned>(receivedData->msg_type)));
+            }
 
             if (receivedData->msg_type == Global::DataFromServerMsgType::TransportUnavailable)
             {
@@ -1550,6 +1557,13 @@ HRESULT CMetasequoiaIME::_HandleCompositionPunctuation(TfEditCookie ec, _In_ ITf
     {
         FanyImeNamedpipeDataToTsf *receivedData =
             TryReadDataFromServerPipeWithTimeout(requestId, /*abortTransportOnTimeout=*/false);
+        if ((code == VK_OEM_PERIOD || code == VK_OEM_COMMA) &&
+            Global::TsfDiagnosticLogEnabled.load(std::memory_order_relaxed))
+        {
+            QueueTsfDiagnosticLog(L"[url-english-trace] phase=tsf-punctuation-reply path=composition request=" +
+                                  std::to_wstring(requestId) + L" msg_type=" +
+                                  std::to_wstring(static_cast<unsigned>(receivedData->msg_type)));
+        }
         if (receivedData->msg_type == Global::DataFromServerMsgType::Preedit ||
             receivedData->msg_type == Global::DataFromServerMsgType::UiLessComposition)
         {
