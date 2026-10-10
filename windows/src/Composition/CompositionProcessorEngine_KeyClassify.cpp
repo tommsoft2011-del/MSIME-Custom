@@ -297,7 +297,8 @@ BOOL CCompositionProcessorEngine::IsVirtualKeyNeed( //
     // punctuation. Shift+8/9/0 give * ( ) and are input too; other Shift+digits still select.
     if (IsDateTimeInputKey(uCode, pwch ? *pwch : 0, _keystrokeBuffer.Get(), _keystrokeBuffer.GetLength(),
                            _caretPosition) ||
-        IsVModeInputKey(pwch ? *pwch : 0, _keystrokeBuffer.Get(), _keystrokeBuffer.GetLength(), _caretPosition))
+        IsVModeInputKey(pwch ? *pwch : 0, _keystrokeBuffer.Get(), _keystrokeBuffer.GetLength(), _caretPosition) ||
+        IsUrlEnglishInputKey(pwch ? *pwch : 0, _keystrokeBuffer.Get(), _keystrokeBuffer.GetLength(), _caretPosition))
     {
         if (pKeyState)
         {
@@ -938,6 +939,22 @@ bool CCompositionProcessorEngine::IsVModeInputKey(WCHAR wch, const WCHAR *buffer
     return buffer != nullptr && FanyImeVModeInput::AcceptsAt(buffer, static_cast<std::size_t>(length),
                                                              static_cast<std::size_t>(min(caret, length)), wch,
                                                              Global::VModeTrigger.load(std::memory_order_relaxed));
+}
+
+bool CCompositionProcessorEngine::IsUrlEnglishInputKey(WCHAR wch, const WCHAR *buffer, DWORD_PTR length, DWORD_PTR caret)
+{
+    if (buffer == nullptr || length == 0 || !Global::UrlEnglishInputEnabled.load(std::memory_order_relaxed) ||
+        Global::JapaneseInputModeEnabled.load(std::memory_order_relaxed))
+    {
+        return false;
+    }
+    // 开了逗号句号翻页时 "." 仍是翻页键（Server 同样判断）。
+    if (wch == L'.' && Global::PagingCommaPeriodEnabled.load(std::memory_order_relaxed))
+    {
+        return false;
+    }
+    return FanyImeUrlEnglishInput::AcceptsAt(buffer, static_cast<std::size_t>(length),
+                                             static_cast<std::size_t>(min(caret, length)), wch);
 }
 
 // 分号触发的句中辅助码段在按键缓冲里记成反引号，与 Server 的 raw 一致。在加入缓冲之前、按与吃键
