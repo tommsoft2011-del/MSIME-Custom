@@ -262,6 +262,24 @@ bool InputSession::symbol_continues_english_input() const
 
 KeyResult InputSession::handle_punctuation(char character)
 {
+    // 英文网址/邮箱符号优先处理，不受中文标点开关影响。
+    // 中文状态下输入英文时的网址符号（如 "aaaa.com" 中的 "."）：英文串里的符号
+    // 是正文的一部分，原样保留进英文输入，不按中文标点上屏，更不能丢掉。
+    if (is_english_url_symbol(character))
+    {
+        // 已经在英文临时模式里（比如刚由下面的 "." 转入）：符号直接进英文串，
+        // "www.baidu.com" 这种多个点也能连起来输。
+        if (local_input_mode_ == LocalInputMode::TemporaryEnglish && local_preedit_.size() > 1)
+        {
+            return handle_local_character(character);
+        }
+        // 专用英文模式：同理直接进英文串。
+        if (dedicated_english_mode_ && !dedicated_english_preedit_.empty())
+        {
+            dedicated_english_preedit_.push_back(character);
+            update_dedicated_english_candidates();
+            return {true, std::nullopt, std::nullopt};
+        }
     // (URL/纯英文输入已移至 QuanpinScheme 和 Server 的共享规则处理，
     //  见 engine/contracts/url_english_input.h。这里不再做模式切换。)
 
