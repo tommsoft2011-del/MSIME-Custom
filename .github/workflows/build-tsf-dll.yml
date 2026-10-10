@@ -1,0 +1,54 @@
+name: Build TSF DLL
+
+# 手动触发：编出带自定义改动的 MetasequoiaIME DLL（x64 + x86 Release），供本地覆盖安装。
+# 用法：Actions 页面点 "Run workflow"。产物在 run 的 Artifacts 里下载。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: TSF DLL Release (x64 + x86)
+    runs-on: windows-2025
+    timeout-minutes: 90
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      - name: Prepare env
+        shell: pwsh
+        working-directory: windows
+        run: python .\scripts\prepare_env.py
+      - name: Build x64 DLL
+        shell: pwsh
+        working-directory: windows
+        run: .\scripts\lcompile-release.ps1 64
+      - name: Build x86 DLL
+        shell: pwsh
+        working-directory: windows
+        run: .\scripts\lcompile-release.ps1 32
+      - name: Collect DLLs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path tsf-dlls | Out-Null
+          $x64 = Get-ChildItem -Path windows/build64-release -Recurse -Filter "MetasequoiaIme*.dll" | Select-Object -First 1
+          $x86 = Get-ChildItem -Path windows/build32-release -Recurse -Filter "MetasequoiaIme*.dll" | Select-Object -First 1
+          if ($x64) { Copy-Item $x64.FullName -Destination tsf-dlls/MetasequoiaIME-x64.dll }
+          if ($x86) { Copy-Item $x86.FullName -Destination tsf-dlls/MetasequoiaIME-x86.dll }
+          Get-ChildItem tsf-dlls/
+      - name: Upload TSF DLLs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: MetasequoiaIME-TSF-custom
+          path: tsf-dlls/
+          if-no-files-found: error
