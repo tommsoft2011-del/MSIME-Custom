@@ -20,10 +20,20 @@
 
 相关提交：`e7a1d5d`、`d37751a`、`71bdf1d`、`fdb9b4a`
 
-### 2. 中文模式下英文网址与邮箱（server/src/ipc/event_listener.cpp 等）
-- `@` 可触发临时英文模式（原来只有 `.` 可以）。
-- 临时英文模式中 `.` `@` `-` `_` `/` `:` 可进入英文串。
-- `test@example.com` 可连续输入；`aaaa.com`、`www.baidu.com` 可连贯输入。
+### 2. 中文状态下连续输入网址 / 英文串（engine/contracts/url_english_input.h 等）
+组合中敲 `.` `@` 不再上屏、也不清空候选，而是作为**编码键**进入输入串（仿照 V 模式）；串里有了网址符号后，`-` `_` `/` `:` 也是编码键。
+
+| 输入 | 候选 | 回车上屏 |
+|------|------|----------|
+| `nihao.` | 与 `nihao` 相同（你好……） | `nihao.` |
+| `aaa.com` | 与 `aaa` 相同 | `aaa.com` |
+| `test@example.com` | 与 `test` 相同 | `test@example.com` |
+
+- 候选只由第一个网址符号之前的部分产生（引擎把它当作光标前缀解码，`InputSession::url_symbol_prefix_end`）。
+- 空格 / 数字选词：选的是前缀的候选，符号及之后的部分留在组合里，再按回车一起上屏（如 `你好.com`）。
+- 退格删掉符号后自动回到普通拼音。
+- 只在全拼 / 双拼生效；Server 通过 `VModeChanged` 载荷的第二位告诉 TSF 当前方案。开了"逗号句号翻页"时 `.` 仍然翻页。
+- 需要同时替换 **Server** 和 **TSF DLL**（两边按同一条规则吃键，只换一边输入串会分叉）。
 
 ### 3. 英文输入中的 `.` 不翻页（server/src/ipc/event_listener.cpp）
 - Server 的 `paging_comma_period` 原本会在 InputSession 之前把 `.` 当翻页键。
