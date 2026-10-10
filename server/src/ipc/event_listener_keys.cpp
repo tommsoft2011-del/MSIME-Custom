@@ -250,14 +250,14 @@ bool IsMidSentenceHelpcodeMarkerKey(UINT keycode, WCHAR wch, const std::string &
     return g_inputSession->accepts_mid_sentence_helpcode_marker(caret);
 }
 
-bool IsSelectionKey(UINT keycode)
+bool IsSelectionKey(UINT keycode, bool is_url_english_input_key)
 {
     if (keycode == VK_SPACE)
         return true;
     if (keycode >= '0' && keycode <= '9')
     {
         const std::string raw = g_inputSession ? g_inputSession->get_pinyin_sequence_with_cases() : std::string{};
-        if (IsUrlEnglishInputKey(Global::Wch, raw))
+        if (is_url_english_input_key)
         {
             return false;
         }
@@ -303,7 +303,7 @@ bool IsCandidateNavigationKey(UINT keycode)
 }
 
 bool ApplyCompositionEditKey(UINT keycode, WCHAR wch, UINT modifiers_down, bool client_supports_restore,
-                             bool &composition_restored)
+                             bool client_supports_url_english_edit, bool &composition_restored)
 {
     composition_restored = false;
     std::string raw = g_inputSession->get_pinyin_sequence_with_cases();
@@ -466,7 +466,7 @@ bool ApplyCompositionEditKey(UINT keycode, WCHAR wch, UINT modifiers_down, bool 
     else
     {
         char input = 0;
-        if (IsUrlEnglishInputKey(wch, raw))
+        if (client_supports_url_english_edit && IsUrlEnglishInputKey(wch, raw))
         {
             input = static_cast<char>(wch);
         }
@@ -871,6 +871,7 @@ void HandleCreatingWordEscape(uint64_t client_id, uint64_t activation_epoch, uin
 void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t request_id)
 {
     const ScopedServerKeyLatency latency{client_id, activation_epoch, request_id};
+    const bool client_supports_url_english_edit = ClientNegotiatedUrlEnglishCompositionEdit(client_id);
     /* 先清理一下状态 */
     Global::MsgTypeToTsf = Global::DataFromServerMsgType::Normal;
     ScopedKeyStage read_packet{client_id, activation_epoch, request_id, L"handle-read-packet"};
@@ -919,9 +920,10 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
     {
         // Shift 放行是给 Shift+Tab 上一页留的；Ctrl/Alt 组合一律退出。
         const std::string raw = g_inputSession ? g_inputSession->get_pinyin_sequence_with_cases() : std::string{};
-        const bool is_url_english_input_key = IsUrlEnglishInputKey(Global::Wch, raw);
+        const bool is_url_english_input_key =
+            client_supports_url_english_edit && IsUrlEnglishInputKey(Global::Wch, raw);
         const bool stays_on_sub_page = (Global::ModifiersDown & 0b00000110u) == 0 &&
-                                       (IsSelectionKey(Global::Keycode) ||
+                                       (IsSelectionKey(Global::Keycode, is_url_english_input_key) ||
                                         (IsCandidateNavigationKey(Global::Keycode) && !is_url_english_input_key));
         if (!stays_on_sub_page)
         {
@@ -949,14 +951,15 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
     const bool chinese_scheme = g_inputSession && (g_inputSession->current_scheme_type() == SchemeType::Quanpin ||
                                                    g_inputSession->current_scheme_type() == SchemeType::Shuangpin);
     const bool was_url_english_composition =
-        chinese_scheme && !g_english_input_mode && !g_r_mode_triggered &&
+        client_supports_url_english_edit && chinese_scheme && !g_english_input_mode && !g_r_mode_triggered &&
         FanyImeUrlEnglishInput::IsEnglishComposition(input_before_key.data(), input_before_key.size());
     const bool pinyin_commit =
         FanyImeIpc::IsPinyinCommitKey(Global::Keycode, Global::ModifiersDown) && !input_before_key.empty();
     const bool convert_shuangpin =
         pinyin_commit && g_inputSession->current_scheme_type() == SchemeType::Shuangpin && !g_english_input_mode &&
         !g_r_mode_triggered && !IsSpecialModeCompositionActive(input_before_key) &&
-        !FanyImeUrlEnglishInput::IsEnglishComposition(input_before_key.data(), input_before_key.size());
+        (!client_supports_url_english_edit ||
+         !FanyImeUrlEnglishInput::IsEnglishComposition(input_before_key.data(), input_before_key.size()));
     if (Global::Keycode == VK_RETURN && !input_before_key.empty() && !convert_shuangpin &&
         GetConfiguredEnterLearnsEnglishWord())
     {
@@ -1028,7 +1031,10 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
     }
 
     const bool unicode_composition_active = IsUnicodeCompositionActive(input_before_key);
-    const bool is_url_english_input_key = IsUrlEnglishInputKey(Global::Wch, input_before_key);
+    const bool is_url_english_input_key =
+        client_supports_url_english_edit && IsUrlEnglishInputKey(Global::Wch, input_before_key);
+    const bool is_url_english_punctuation_edit =
+        is_url_english_input_key && FanyImeUrlEnglishInput::IsEnglishPunctuation(static_cast<char>(Global::Wch));
     const bool is_paging_key = IsPagingKey(Global::Keycode) && !is_url_english_input_key;
     const bool is_manual_pinyin_separator =
         !is_url_english_input_key && IsManualPinyinSeparatorKey(Global::Keycode, Global::Wch);
@@ -1058,7 +1064,8 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
          !is_mid_sentence_helpcode_marker && !is_direct_helpcode_slash && !is_date_time_input_key &&
          !is_v_mode_input_key && !is_v_mode_shift_digit_selection &&
          IsCommitWithHighlightedCandidatePunctuationInCandidateMode(Global::Keycode, Global::Wch));
-    const bool is_selection_key = !is_url_english_input_key && IsSelectionKey(Global::Keycode);
+    const bool is_selection_key =
+        !is_url_english_input_key && IsSelectionKey(Global::Keycode, is_url_english_input_key);
     const bool is_unicode_shift_digit_selection =
         unicode_composition_active && shift_only && Global::Keycode >= '1' && Global::Keycode <= '9';
     const bool is_unicode_hex_digit = unicode_composition_active && !is_unicode_shift_digit_selection &&
@@ -1141,7 +1148,7 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
                                                  client_supports_restore);
         ScopedKeyStage engine_edit{client_id, activation_epoch, request_id, L"handle-engine"};
         ApplyCompositionEditKey(Global::Keycode, Global::Wch, Global::ModifiersDown, client_supports_restore,
-                                composition_restored);
+                                client_supports_url_english_edit, composition_restored);
     }
     else if (should_forward_key_to_session)
     {
@@ -1151,7 +1158,7 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
     GlobalIme::composition.segmented_pinyin = g_inputSession->get_pinyin_segmentation_with_cases();
     GlobalIme::composition.raw_input_with_cases = g_inputSession->get_pinyin_sequence_with_cases();
     const bool current_url_english_composition =
-        chinese_scheme && !g_english_input_mode && !g_r_mode_triggered &&
+        client_supports_url_english_edit && chinese_scheme && !g_english_input_mode && !g_r_mode_triggered &&
         FanyImeUrlEnglishInput::IsEnglishComposition(GlobalIme::composition.raw_input_with_cases.data(),
                                                      GlobalIme::composition.raw_input_with_cases.size());
     if (g_english_input_mode)
@@ -1427,7 +1434,9 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
         }
         else
         {
-            if (GlobalSettings::getTsfPreeditStyle() == GlobalSettings::TsfPreeditStyle::Pinyin)
+            if (FanyImeIpc::ShouldSendTsfPreeditReply(GlobalSettings::getTsfPreeditStyle() ==
+                                                          GlobalSettings::TsfPreeditStyle::Pinyin,
+                                                      is_url_english_punctuation_edit))
             {
                 std::wstring preedit = GetTsfPreedit();
                 Global::MsgTypeToTsf = Global::DataFromServerMsgType::Preedit;

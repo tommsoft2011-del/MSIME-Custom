@@ -646,6 +646,7 @@ void PrepareCandidateList(uint64_t client_id, uint64_t activation_epoch)
     }
     std::string pinyin = wstring_to_string(Global::PinyinString);
     const std::string current_input = g_inputSession->get_pinyin_sequence_with_cases();
+    const bool client_supports_url_english_edit = ClientNegotiatedUrlEnglishCompositionEdit(client_id);
     std::vector<WordItem> items;
     if (g_english_input_mode)
     {
@@ -710,6 +711,7 @@ void PrepareCandidateList(uint64_t client_id, uint64_t activation_epoch)
     else if (!g_r_mode_triggered &&
              (g_inputSession->current_scheme_type() == SchemeType::Quanpin ||
               g_inputSession->current_scheme_type() == SchemeType::Shuangpin) &&
+             client_supports_url_english_edit &&
              FanyImeUrlEnglishInput::IsEnglishComposition(current_input.data(), current_input.size()))
     {
         // Once uppercase or ASCII punctuation makes the composition English,
@@ -771,7 +773,8 @@ void PrepareCandidateList(uint64_t client_id, uint64_t activation_epoch)
     // 快捷短语不在这里：它要跟着翻页扩展重新放置，已经在上面同步混进去了。
     MixedCandidates::Request mixed;
     if (!g_english_input_mode && !IsSpecialModeCompositionActive(current_input) &&
-        !FanyImeUrlEnglishInput::IsEnglishComposition(current_input.data(), current_input.size()) &&
+        (!client_supports_url_english_edit ||
+         !FanyImeUrlEnglishInput::IsEnglishComposition(current_input.data(), current_input.size())) &&
         GetConfiguredMixedCandidatesEnabled() && (scheme == SchemeType::Quanpin || scheme == SchemeType::Shuangpin) &&
         !GlobalIme::composition.creating_word.active)
     {

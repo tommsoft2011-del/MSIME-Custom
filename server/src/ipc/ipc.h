@@ -126,6 +126,9 @@ uint64_t RegisterToTsfPipeClient(uint64_t client_id, HANDLE pipe);
 // optional CompositionRestore capability. Server-to-client replies that older
 // DLLs would reject must be gated on it.
 bool ClientNegotiatedCompositionRestore(uint64_t client_id);
+// True only for a versioned DLL that opted into Server-confirmed URL edits.
+// Older DLLs retain the pre-feature punctuation/commit path.
+bool ClientNegotiatedUrlEnglishCompositionEdit(uint64_t client_id);
 // True only for a versioned client that advertised CaretStateIndicator, i.e.
 // its character-set shortcut KeyEvent carries a caret anchor in point[].
 bool ClientNegotiatedCaretStateIndicator(uint64_t client_id);

@@ -14,10 +14,21 @@
 #include "CommitCandidateAndContinuePayload.h"
 #include "FanyDefines.h"
 #include "../../../engine/contracts/preedit_caret_map.h"
+#include "../../../engine/contracts/url_english_input.h"
 
 namespace
 {
 thread_local std::wstring g_toggleImeFallbackBuffer;
+
+bool IsUrlEnglishCompositionEdit(CCompositionProcessorEngine *engine, WCHAR wch)
+{
+    if (!engine)
+    {
+        return false;
+    }
+    const std::wstring raw = engine->GetKeystrokeBuffer().ToWString();
+    return FanyImeUrlEnglishInput::AcceptsChar(raw.data(), raw.size(), static_cast<wchar_t>(wch));
+}
 
 // The closing half the pressed key would step over, or 0 when the key cannot
 // close a tracked pair. Quotes are keyed symmetrically: '"' resolves to either
@@ -455,7 +466,7 @@ HRESULT CMetasequoiaIME::_HandleCancelVoiceComposition(TfEditCookie ec, _In_ ITf
 //----------------------------------------------------------------------------
 
 HRESULT CMetasequoiaIME::_HandleCompositionInput(TfEditCookie ec, _In_ ITfContext *pContext, WCHAR wch,
-                                                 uint64_t requestId)
+                                                 uint64_t requestId, const std::wstring &prefetchedPreedit)
 {
     HRESULT workerResult = S_OK;
     ITfRange *pRangeComposition = nullptr;
@@ -517,7 +528,8 @@ HRESULT CMetasequoiaIME::_HandleCompositionInput(TfEditCookie ec, _In_ ITfContex
         g_toggleImeFallbackBuffer.push_back(wch);
     }
 
-    workerResult = _HandleCompositionInputWorker(pCompositionProcessorEngine, ec, pContext, requestId);
+    workerResult =
+        _HandleCompositionInputWorker(pCompositionProcessorEngine, ec, pContext, requestId, prefetchedPreedit);
 
     DebugTsfIssue47(L"composition-input-complete", requestId, 0, wch, CATEGORY_COMPOSING, FUNCTION_INPUT, 1,
                     _IsComposing(), pCompositionProcessorEngine->GetVirtualKeyLength(), workerResult,
@@ -537,7 +549,8 @@ Exit:
 //----------------------------------------------------------------------------
 
 HRESULT CMetasequoiaIME::_HandleCompositionInputWorker(_In_ CCompositionProcessorEngine *pCompositionProcessorEngine,
-                                                       TfEditCookie ec, _In_ ITfContext *pContext, uint64_t requestId)
+                                                       TfEditCookie ec, _In_ ITfContext *pContext, uint64_t requestId,
+                                                       const std::wstring &prefetchedPreedit)
 {
     HRESULT hr = S_OK;
     CMetasequoiaImeArray<CStringRange> readingStrings;
@@ -560,7 +573,31 @@ HRESULT CMetasequoiaIME::_HandleCompositionInputWorker(_In_ CCompositionProcesso
     /* 一般来说，readingStrings 数组中只有一个元素，这个元素就是当前输入的拼音 */
 
     // UILess hosts need a synchronous candidate page before UpdateUIElement.
-    if (Global::IsUiLessMode() && requestId != FANY_IME_NO_REQUEST_ID)
+    if (Global::IsUiLessMode() && !prefetchedPreedit.empty())
+    {
+        const size_t firstTab = prefetchedPreedit.find(L'\t');
+        if (firstTab == std::wstring::npos)
+        {
+            uiLessPreedit = prefetchedPreedit;
+        }
+        else
+        {
+            uiLessPreedit = prefetchedPreedit.substr(0, firstTab);
+            const size_t secondTab = prefetchedPreedit.find(L'\t', firstTab + 1);
+            if (secondTab == std::wstring::npos)
+            {
+                uiLessCandidatePage = prefetchedPreedit.substr(firstTab + 1);
+            }
+            else
+            {
+                uiLessCandidatePage = prefetchedPreedit.substr(firstTab + 1, secondTab - firstTab - 1);
+                uiLessSelection = _wtoi(prefetchedPreedit.c_str() + secondTab + 1);
+            }
+        }
+        gotUiLessComposition = true;
+        GlobalIme::pending_create_word_preedit.clear();
+    }
+    else if (Global::IsUiLessMode() && requestId != FANY_IME_NO_REQUEST_ID)
     {
         struct FanyImeNamedpipeDataToTsf *receivedData =
             TryReadDataFromServerPipeWithTimeout(requestId, /*abortTransportOnTimeout=*/false);
@@ -616,7 +653,13 @@ HRESULT CMetasequoiaIME::_HandleCompositionInputWorker(_In_ CCompositionProcesso
         else if (preeditStyle == GlobalSettings::TsfPreeditStyle::Pinyin)
         {
             bool gotServerPreedit = false;
-            if (!GlobalIme::pending_create_word_preedit.empty())
+            if (!prefetchedPreedit.empty() && !Global::IsUiLessMode())
+            {
+                readingStr = prefetchedPreedit;
+                GlobalIme::pending_create_word_preedit.clear();
+                gotServerPreedit = true;
+            }
+            else if (!GlobalIme::pending_create_word_preedit.empty())
             {
                 readingStr = std::move(GlobalIme::pending_create_word_preedit);
                 GlobalIme::pending_create_word_preedit.clear();
@@ -1456,6 +1499,14 @@ HRESULT CMetasequoiaIME::_HandleCompositionPunctuation(TfEditCookie ec, _In_ ITf
                                                              : HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE);
             }
 
+            if (SupportsUrlEnglishCompositionEdit() &&
+                (receivedData->msg_type == Global::DataFromServerMsgType::Preedit ||
+                 receivedData->msg_type == Global::DataFromServerMsgType::UiLessComposition))
+            {
+                const std::wstring serverPreedit(receivedData->candidate_string);
+                return _HandleCompositionInput(ec, pContext, wch, FANY_IME_NO_REQUEST_ID, serverPreedit);
+            }
+
             // The Server is authoritative for configurable candidate-navigation
             // keys. The local paging snapshot can briefly lag behind while a TSF
             // client connects or a setting changes, so a comma/period may have
@@ -1486,6 +1537,24 @@ HRESULT CMetasequoiaIME::_HandleCompositionPunctuation(TfEditCookie ec, _In_ ITf
                     punctuationStr = candidate + _ResolveSmartPunctuation(wch, preceding);
                 }
             }
+        }
+    }
+
+    // With no candidate presenter, the punctuation edit session normally
+    // commits locally without reading a reply. If the shared URL rule says the
+    // Server should keep this key in the composition, consume its confirmation
+    // first and mirror the key as ordinary composition input.
+    if (!hasPendingPunctuationCommitText && _candidateMode == CANDIDATE_NONE && _IsComposing() &&
+        requestId != FANY_IME_NO_REQUEST_ID && SupportsUrlEnglishCompositionEdit() &&
+        IsUrlEnglishCompositionEdit(pCompositionProcessorEngine, wch))
+    {
+        FanyImeNamedpipeDataToTsf *receivedData =
+            TryReadDataFromServerPipeWithTimeout(requestId, /*abortTransportOnTimeout=*/false);
+        if (receivedData->msg_type == Global::DataFromServerMsgType::Preedit ||
+            receivedData->msg_type == Global::DataFromServerMsgType::UiLessComposition)
+        {
+            const std::wstring serverPreedit(receivedData->candidate_string);
+            return _HandleCompositionInput(ec, pContext, wch, FANY_IME_NO_REQUEST_ID, serverPreedit);
         }
     }
 

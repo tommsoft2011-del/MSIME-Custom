@@ -35,6 +35,9 @@ int main()
     CHECK(!FanyImePipeEventType::IsRouteDeactivation(FanyImePipeEventType::HideCaretState));
     CHECK(FanyImeProtocol::CaretStateIndicator == (1u << 5));
     CHECK((FanyImeProtocol::CaretStateIndicator & FanyImeProtocol::RequiredCapabilities) == 0);
+    CHECK(FanyImeProtocol::UrlEnglishCompositionEdit == (1u << 6));
+    CHECK(!FanyImeProtocol::SupportsCapability(FanyImeProtocol::Negotiate(legacy),
+                                               FanyImeProtocol::UrlEnglishCompositionEdit));
     // CapsLockEdge keeps the VK_CAPITAL value the first Servers matched on.
     CHECK(FanyImeCaretStateTrigger::UserToggle == 0);
     CHECK(FanyImeCaretStateTrigger::CapsLockEdge == 0x14);
@@ -104,6 +107,15 @@ int main()
           restoreCapabilities);
     CHECK((FanyImeProtocol::Negotiate(hello, restoreCapabilities).capabilities & FanyImeProtocol::CompositionRestore) ==
           0); // old client/new server
+    const auto urlEditCapabilities = FanyImeProtocol::Capabilities | FanyImeProtocol::UrlEnglishCompositionEdit;
+    const auto urlEditHello = FanyImeProtocol::Hello(7, 22, urlEditCapabilities);
+    const auto oldServerForUrlEdit = FanyImeProtocol::Negotiate(urlEditHello);
+    CHECK(oldServerForUrlEdit.accepted);
+    CHECK(!FanyImeProtocol::SupportsCapability(oldServerForUrlEdit, FanyImeProtocol::UrlEnglishCompositionEdit));
+    const auto newServerForUrlEdit = FanyImeProtocol::Negotiate(urlEditHello, urlEditCapabilities);
+    CHECK(FanyImeProtocol::SupportsCapability(newServerForUrlEdit, FanyImeProtocol::UrlEnglishCompositionEdit));
+    CHECK(!FanyImeProtocol::SupportsCapability(FanyImeProtocol::Negotiate(hello, urlEditCapabilities),
+                                               FanyImeProtocol::UrlEnglishCompositionEdit)); // old client/new Server
     CHECK(FanyImeReplyType::CompositionRestored == 14);
     CHECK(FanyImeReplyType::MaxKnown == FanyImeReplyType::CompositionRestored);
     CHECK(FanyImeReplyType::TransportUnavailable > FanyImeReplyType::MaxKnown);

@@ -26,6 +26,9 @@ constexpr std::uint32_t CompositionRestore = 1u << 4;
 // still travels in StatusSnapshot. A client must not send them unless the
 // Server acknowledged this bit.
 constexpr std::uint32_t CaretStateIndicator = 1u << 5;
+// Optional: the client mirrors Server-confirmed URL punctuation edits into
+// its TSF composition instead of treating the reply as a commit.
+constexpr std::uint32_t UrlEnglishCompositionEdit = 1u << 6;
 constexpr std::uint32_t Capabilities = RequestIds | FocusEpochs | FramedVoice;
 constexpr std::uint32_t RequiredCapabilities = RequestIds | FocusEpochs;
 
@@ -35,6 +38,11 @@ struct Negotiation
     bool legacy = false;
     std::uint32_t capabilities = 0;
 };
+
+constexpr bool SupportsCapability(const Negotiation &negotiation, std::uint32_t capability) noexcept
+{
+    return negotiation.accepted && !negotiation.legacy && (negotiation.capabilities & capability) == capability;
+}
 
 inline FanyImeNamedpipeData Hello(std::uint64_t client, std::uint64_t request,
                                   std::uint32_t capabilities = Capabilities)

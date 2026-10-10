@@ -102,6 +102,15 @@ TEST_CASE(composition_reply_includes_microsoft_shuangpin_ing_key)
     REQUIRE(FanyImeIpc::ShouldSendCompositionReply(false, false, false, false, false, false, true));
 }
 
+TEST_CASE(url_composition_edits_receive_a_reply_even_in_raw_preedit_style)
+{
+    // The punctuation that enters raw URL composition needs an acknowledgement;
+    // subsequent letters and digits are mirrored locally as before.
+    REQUIRE(FanyImeIpc::ShouldSendTsfPreeditReply(false, true));
+    REQUIRE(FanyImeIpc::ShouldSendTsfPreeditReply(true, false));
+    REQUIRE(!FanyImeIpc::ShouldSendTsfPreeditReply(false, false));
+}
+
 TEST_CASE(backspace_retracts_the_last_selected_segment_before_deleting)
 {
     using FanyImeIpc::ShouldRetreatCreatingWordSelection;

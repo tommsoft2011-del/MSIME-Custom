@@ -291,7 +291,7 @@ CKeyStateComposing::CKeyStateComposing(_In_ CMetasequoiaIME *pTextService) : CKe
 
 HRESULT CKeyStateComposing::HandleKeyInput(KeyHandlerEditSessionDTO dto)
 {
-    return _pTextService->_HandleCompositionInput(dto.ec, dto.pContext, dto.wch, dto.requestId);
+    return _pTextService->_HandleCompositionInput(dto.ec, dto.pContext, dto.wch, dto.requestId, dto.prefetchedText);
 }
 
 HRESULT CKeyStateComposing::HandleKeyFinalizeTextStoreAndInput(KeyHandlerEditSessionDTO dto)

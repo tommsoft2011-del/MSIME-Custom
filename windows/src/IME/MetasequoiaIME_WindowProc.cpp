@@ -750,6 +750,38 @@ LRESULT CALLBACK CMetasequoiaIME_WindowProc(HWND hWnd, UINT message, WPARAM wPar
             }
             break;
         }
+        if (SupportsUrlEnglishCompositionEdit() &&
+            (receivedData->msg_type == Global::DataFromServerMsgType::Preedit ||
+             receivedData->msg_type == Global::DataFromServerMsgType::UiLessComposition))
+        {
+            // The Server kept this key in the URL composition. Apply it to
+            // TSF's local buffer only after that authoritative reply; this is
+            // not a candidate commit, even when period/comma looked pageable.
+            const std::wstring prefetchedPreedit(receivedData->candidate_string);
+            ITfDocumentMgr *pDocMgrFocus = nullptr;
+            ITfContext *pContext = nullptr;
+            bool handedOffReplay = false;
+            if (SUCCEEDED(pIME->_GetThreadMgr()->GetFocus(&pDocMgrFocus)) && pDocMgrFocus)
+            {
+                if (SUCCEEDED(pDocMgrFocus->GetTop(&pContext)) && pContext)
+                {
+                    _KEYSTROKE_STATE keyState;
+                    keyState.Category = CATEGORY_COMPOSING;
+                    keyState.Function = FUNCTION_INPUT;
+                    pIME->_InvokeKeyHandler(pContext, code, wch, 0, keyState, FANY_IME_NO_REQUEST_ID, prefetchedPreedit,
+                                            0, request.compositionEpoch, request.focusToken,
+                                            request.deferredReplayToken);
+                    handedOffReplay = true;
+                    pContext->Release();
+                }
+                pDocMgrFocus->Release();
+            }
+            if (!handedOffReplay)
+            {
+                pIME->_FailDeferredKey(request.deferredReplayToken, DeferredKeyFailureReason::AsyncPostFailed);
+            }
+            break;
+        }
         if (navigationOnly)
         {
             // The Server never commits for these keys, so the reply (or the

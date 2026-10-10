@@ -806,7 +806,8 @@ bool NegotiateMainPipeClient(const FanyImeNamedpipeData &hello, uint64_t registr
 {
     const auto protocol = FanyImeProtocol::Negotiate(
         hello, FanyImeProtocol::Capabilities | FanyImeProtocol::CharacterSetShortcut |
-                   FanyImeProtocol::CompositionRestore | FanyImeProtocol::CaretStateIndicator);
+                   FanyImeProtocol::CompositionRestore | FanyImeProtocol::CaretStateIndicator |
+                   FanyImeProtocol::UrlEnglishCompositionEdit);
     std::lock_guard lock(g_pipe_clients_mutex);
     auto it = g_pipe_clients.find(hello.client_id);
     if (it == g_pipe_clients.end() || registration_id == 0 || it->second.main_registration_id != registration_id)
@@ -837,6 +838,14 @@ bool ClientNegotiatedCompositionRestore(uint64_t client_id)
     const auto it = g_pipe_clients.find(client_id);
     return it != g_pipe_clients.end() && !it->second.protocol.legacy &&
            (it->second.protocol.capabilities & FanyImeProtocol::CompositionRestore) != 0;
+}
+
+bool ClientNegotiatedUrlEnglishCompositionEdit(uint64_t client_id)
+{
+    std::lock_guard lock(g_pipe_clients_mutex);
+    const auto it = g_pipe_clients.find(client_id);
+    return it != g_pipe_clients.end() &&
+           FanyImeProtocol::SupportsCapability(it->second.protocol, FanyImeProtocol::UrlEnglishCompositionEdit);
 }
 
 bool ClientNegotiatedCaretStateIndicator(uint64_t client_id)

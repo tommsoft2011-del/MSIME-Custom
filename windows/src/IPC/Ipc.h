@@ -47,6 +47,7 @@ bool EnsureNamedpipeFocusSessionActivated();
 bool SupportsCharacterSetShortcut();
 bool SupportsCompositionRestore();
 bool SupportsCaretStateIndicator();
+bool SupportsUrlEnglishCompositionEdit();
 bool FlushNamedpipeFocusSessionReset();
 bool FlushNamedpipeImeDeactivation(uint64_t focusToken = 0);
 

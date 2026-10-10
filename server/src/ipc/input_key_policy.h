@@ -134,6 +134,14 @@ constexpr bool ShouldSendCompositionReply(bool is_alpha_key, bool is_manual_piny
            is_unicode_plus || is_japanese_long_vowel || is_date_time_input_key;
 }
 
+// URL punctuation is applied to the Server composition and acknowledged by
+// the TSF DLL in every preedit style; subsequent raw-style letters/digits are
+// already mirrored locally and do not need a reply.
+constexpr bool ShouldSendTsfPreeditReply(bool pinyin_preedit_style, bool url_english_punctuation_edit)
+{
+    return pinyin_preedit_style || url_english_punctuation_edit;
+}
+
 // Backspace inside a live creating-word state retracts the newest selection
 // first -- Rime/WeChat style "backspace undoes the last pick" -- instead of the
 // old caret-qualified triggers (delete the remaining raw down to the last

@@ -273,7 +273,8 @@ class CMetasequoiaIME : public ITfTextInputProcessorEx,
     HRESULT _HandleCancelVoiceComposition(TfEditCookie ec, _In_ ITfContext *pContext);
 
     // key event handlers for composition object.
-    HRESULT _HandleCompositionInput(TfEditCookie ec, _In_ ITfContext *pContext, WCHAR wch, uint64_t requestId);
+    HRESULT _HandleCompositionInput(TfEditCookie ec, _In_ ITfContext *pContext, WCHAR wch, uint64_t requestId,
+                                    const std::wstring &prefetchedPreedit = {});
     HRESULT _HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext *pContext, BOOL fCandidateList);
     HRESULT _HandleCompositionConvert(TfEditCookie ec, _In_ ITfContext *pContext, BOOL isWildcardSearch);
     HRESULT _HandleCompositionBackspace(TfEditCookie ec, _In_ ITfContext *pContext, uint64_t requestId);
@@ -447,7 +448,8 @@ class CMetasequoiaIME : public ITfTextInputProcessorEx,
   private:
     // functions for the composition object.
     HRESULT _HandleCompositionInputWorker(_In_ CCompositionProcessorEngine *pCompositionProcessorEngine,
-                                          TfEditCookie ec, _In_ ITfContext *pContext, uint64_t requestId);
+                                          TfEditCookie ec, _In_ ITfContext *pContext, uint64_t requestId,
+                                          const std::wstring &prefetchedPreedit = {});
     HRESULT _CreateAndStartCandidate(_In_ CCompositionProcessorEngine *pCompositionProcessorEngine, TfEditCookie ec,
                                      _In_ ITfContext *pContext);
     HRESULT _HandleCandidateWorker(TfEditCookie ec, _In_ ITfContext *pContext, uint64_t requestId,
