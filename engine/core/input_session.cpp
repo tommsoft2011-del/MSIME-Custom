@@ -3,7 +3,6 @@
 #include "../common/helpcode_utils.h"
 #include "../contracts/date_time_input.h"
 #include "../contracts/direct_helpcode.h"
-#include "../contracts/url_english_input.h"
 #include "../local_modes/date_time_query.h"
 #include "../local_modes/emoji_query.h"
 #include "../local_modes/jianpin_query.h"
@@ -263,25 +262,8 @@ bool InputSession::symbol_continues_english_input() const
 
 KeyResult InputSession::handle_punctuation(char character)
 {
-    // 英文网址/邮箱符号优先处理，不受中文标点开关影响。
-    // 中文状态下输入英文时的网址符号（如 "aaaa.com" 中的 "."）：英文串里的符号
-    // 是正文的一部分，原样保留进英文输入，不按中文标点上屏，更不能丢掉。
-    if (is_english_url_symbol(character))
-    {
-        // 已经在英文临时模式里（比如刚由下面的 "." 转入）：符号直接进英文串，
-        // "www.baidu.com" 这种多个点也能连起来输。
-        if (local_input_mode_ == LocalInputMode::TemporaryEnglish && local_preedit_.size() > 1)
-        {
-            return handle_local_character(character);
-        }
-        // 专用英文模式：同理直接进英文串。
-        if (dedicated_english_mode_ && !dedicated_english_preedit_.empty())
-        {
-            dedicated_english_preedit_.push_back(character);
-            update_dedicated_english_candidates();
-            return {true, std::nullopt, std::nullopt};
-        }
-    }
+    // (URL/纯英文输入已移至 QuanpinScheme 和 Server 的共享规则处理，
+    //  见 engine/contracts/url_english_input.h。这里不再做模式切换。)
 
     if (!chinese_punctuation_enabled_)
     {
@@ -1172,49 +1154,29 @@ std::size_t InputSession::quantized_prefix_end() const
     return *std::prev(std::upper_bound(boundaries.begin(), boundaries.end(), caret_position()));
 }
 
-std::optional<std::size_t> InputSession::url_symbol_prefix_end() const
-{
-    // 定制版（2026-10-10）：中文全拼/双拼里敲进了网址符号（"nihao."、"aaa.com"），候选只由第一个
-    // 网址符号之前的部分产生，当作一个固定的"光标前缀"；符号及之后的部分是待定后缀，回车时随整串原样上屏。
-    if (dedicated_english_mode_ || local_input_mode_ != LocalInputMode::None ||
-        (scheme() != SchemeType::Quanpin && scheme() != SchemeType::Shuangpin))
-    {
-        return std::nullopt;
-    }
-    const std::string &raw = get_pinyin_sequence_with_cases();
-    if (!FanyImeUrlEnglishInput::IsComposition(raw.data(), raw.size()))
-    {
-        return std::nullopt;
-    }
-    return FanyImeUrlEnglishInput::FirstUrlSymbol(raw.data(), raw.size());
-}
-
 std::size_t InputSession::prefix_end() const
 {
-    const std::size_t end = quantized_prefix_end();
-    const auto url_end = url_symbol_prefix_end();
-    return url_end ? std::min(end, *url_end) : end;
+    return quantized_prefix_end();
 }
 
 std::string InputSession::pending_suffix() const
 {
     const std::string &raw = get_pinyin_sequence_with_cases();
-    const std::size_t end = prefix_end();
+    const std::size_t end = quantized_prefix_end();
     return end < raw.size() ? raw.substr(end) : std::string{};
 }
 
 void InputSession::refresh_prefix_candidates()
 {
     prefix_candidates_active_ = false;
-    const bool url_prefix = url_symbol_prefix_end().has_value();
-    if ((!caret_.has_value() && !url_prefix) || dedicated_english_mode_ || local_input_mode_ != LocalInputMode::None)
+    if (!caret_.has_value() || dedicated_english_mode_ || local_input_mode_ != LocalInputMode::None)
     {
         prefix_candidates_.clear();
         prefix_query_input_.clear();
         return;
     }
     const std::string &raw_with_cases = get_pinyin_sequence_with_cases();
-    const std::size_t end = prefix_end();
+    const std::size_t end = quantized_prefix_end();
     if (end >= raw_with_cases.size())
     {
         // The caret sits on the final boundary or the scheme has no unit model: the full-string
