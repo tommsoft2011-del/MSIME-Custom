@@ -12,7 +12,6 @@
 #include "../../../engine/contracts/windows_ipc.h"
 #include "../../../engine/contracts/direct_helpcode.h"
 #include "../../../engine/contracts/v_mode_input.h"
-#include "../../../engine/contracts/url_english_input.h"
 
 int InitIpc();
 int InitNamedpipe();
@@ -228,9 +227,6 @@ inline std::atomic_bool DirectHelpcodeSlashEnabled{true};
 // V 模式（数字转中文、算式计算）由哪个前缀开启：双拼只认大写 V，全拼 V、v 都认，关着或不是全拼/双拼时
 // 不开。V 后面的数字和 . + - * / ( ) 按 engine/contracts/v_mode_input.h 的规则当编码键吃掉。
 inline std::atomic<FanyImeVModeInput::Trigger> VModeTrigger{FanyImeVModeInput::Trigger::Off};
-// 定制版：当前方案是全拼/双拼（随 VModeChanged 的第二位下发）。为真时，组合中的网址 / 英文串符号
-// （. @ 以及之后的 - _ / :）按 engine/contracts/url_english_input.h 当编码键吃掉，回车整串上屏。
-inline std::atomic_bool UrlEnglishInputEnabled{false};
 inline std::atomic_bool JapaneseInputModeEnabled{false};
 inline std::atomic_bool CapsLockEnabled{false};
 inline std::atomic_bool TsfDiagnosticLogEnabled{false};

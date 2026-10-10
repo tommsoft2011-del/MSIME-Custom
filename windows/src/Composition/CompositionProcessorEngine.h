@@ -61,10 +61,6 @@ class CCompositionProcessorEngine
     // engine/contracts/v_mode_input.h，前缀由 Server 的 VModeChanged 决定。
     static bool IsVModeInputKey(WCHAR wch, _In_reads_opt_(length) const WCHAR *buffer, DWORD_PTR length,
                                 DWORD_PTR caret);
-    // 定制版：中文全拼/双拼组合中的网址 / 英文串符号（. @，以及之后的 - _ / :）是编码键，进按键缓冲，
-    // 回车整串上屏（aaa.com、nihao.）。规则见 engine/contracts/url_english_input.h，Server 按同一条规则改输入串。
-    static bool IsUrlEnglishInputKey(WCHAR wch, _In_reads_opt_(length) const WCHAR *buffer, DWORD_PTR length,
-                                     DWORD_PTR caret);
     // V 模式里数字键用来输入，选词改用 Shift+数字（同 U 模式）。放在 IsVModeInputKey 之后判断：Shift+8/9
     // 打出的 * ( 在那里已经当编码键收下了。
     static bool IsVModeShiftDigitSelectionKey(UINT uCode, _In_reads_opt_(length) const WCHAR *buffer, DWORD_PTR length);

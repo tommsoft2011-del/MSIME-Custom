@@ -1,5 +1,6 @@
 #include "quanpin_scheme.h"
 #include "../common/helpcode_utils.h"
+#include "../contracts/url_english_input.h"
 #include "../quanpin/quanpin_query.h"
 #include "../quanpin/quanpin_utils.h"
 #include "../shuangpin/shuangpin_query.h"
@@ -46,26 +47,24 @@ void QuanpinScheme::handle_key(ImeKeyCode vk, ImeModifierMask modifiers_down, Im
         return;
     }
 
+    // The Server uses the same contract to route English-mode punctuation and
+    // digits here, so the Engine raw string stays in sync with the preedit.
+    const bool is_english_mode_ascii_character =
+        FanyImeUrlEnglishInput::IsEnglishPunctuation(wch) || FanyImeUrlEnglishInput::IsAsciiDigit(wch);
+    if (is_english_mode_ascii_character && !raw_input_.empty() &&
+        FanyImeUrlEnglishInput::AcceptsChar(raw_input_.data(), raw_input_.size(), static_cast<char>(wch)))
+    {
+        key_strokes_.push_back(KeyStroke{vk, modifiers_down, wch});
+        raw_input_.push_back(static_cast<char>(wch));
+        return;
+    }
+
     if (vk == ImeKey::Apostrophe)
     {
         if (raw_input_.empty() || raw_input_.back() != '\'')
         {
             key_strokes_.push_back(KeyStroke{vk, modifiers_down, wch});
             raw_input_.push_back('\'');
-        }
-        return;
-    }
-
-    // 纯英文标点：. @ - _ / :，按 engine/contracts/url_english_input.h 规则收进 raw。
-    // 必须在 is_alpha_vk 判断之前，否则会被直接丢掉。
-    // 用户规则：串里出现标点就按纯英文算，不再管备选词，回车整串上屏。
-    if (wch == L'.' || wch == L'@' || wch == L'-' || wch == L'_' || wch == L'/' || wch == L':')
-    {
-        // 只要 raw 非空就收下，Server 侧已用同一规则做过前置判断。
-        if (!raw_input_.empty())
-        {
-            key_strokes_.push_back(KeyStroke{vk, modifiers_down, wch});
-            raw_input_.push_back(static_cast<char>(wch));
         }
         return;
     }

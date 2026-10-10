@@ -17,6 +17,7 @@
 #include <utf8.h>
 #include "global/globals.h"
 #include "engine/common/helpcode_utils.h"
+#include "engine/contracts/url_english_input.h"
 #include "engine/quanpin/quanpin_query.h"
 #include "engine/user_dictionary/user_dictionary_journal.h"
 #include "cloud/cloud_translation.h"
@@ -706,6 +707,15 @@ void PrepareCandidateList(uint64_t client_id, uint64_t activation_epoch)
         // normal pinyin candidates. Leave items empty so only the raw typed text
         // shows as the fallback.
     }
+    else if (!g_r_mode_triggered &&
+             (g_inputSession->current_scheme_type() == SchemeType::Quanpin ||
+              g_inputSession->current_scheme_type() == SchemeType::Shuangpin) &&
+             FanyImeUrlEnglishInput::IsEnglishComposition(current_input.data(), current_input.size()))
+    {
+        // Once uppercase or ASCII punctuation makes the composition English,
+        // do not expose pinyin candidates; keep one literal candidate for Space.
+        items.emplace_back("", current_input, 0, CandidateSource::Generated);
+    }
     else
     {
         items = g_inputSession->get_candidates();
@@ -761,6 +771,7 @@ void PrepareCandidateList(uint64_t client_id, uint64_t activation_epoch)
     // 快捷短语不在这里：它要跟着翻页扩展重新放置，已经在上面同步混进去了。
     MixedCandidates::Request mixed;
     if (!g_english_input_mode && !IsSpecialModeCompositionActive(current_input) &&
+        !FanyImeUrlEnglishInput::IsEnglishComposition(current_input.data(), current_input.size()) &&
         GetConfiguredMixedCandidatesEnabled() && (scheme == SchemeType::Quanpin || scheme == SchemeType::Shuangpin) &&
         !GlobalIme::composition.creating_word.active)
     {

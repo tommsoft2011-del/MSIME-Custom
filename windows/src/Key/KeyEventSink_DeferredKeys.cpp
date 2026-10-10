@@ -561,12 +561,6 @@ bool CMetasequoiaIME::_ClassifyDeferredKeyDown(_In_ ITfContext *pContext, WPARAM
             isInputKey = CCompositionProcessorEngine::IsVModeInputKey(*classifiedWch, shadow.rawInput.data(),
                                                                       shadow.rawInput.size(), shadow.caret);
         }
-        // 定制版：网址 / 英文串里的 . @ - _ / :，同上。
-        if (!isInputKey)
-        {
-            isInputKey = CCompositionProcessorEngine::IsUrlEnglishInputKey(*classifiedWch, shadow.rawInput.data(),
-                                                                           shadow.rawInput.size(), shadow.caret);
-        }
         if (shadow.inputLength == 0 && (GetKeyState(VK_CAPITAL) & 0x0001) != 0 && *classifiedWch >= L'A' &&
             *classifiedWch <= L'Z' && *classifiedCode >= L'A' && *classifiedCode <= L'Z')
         {

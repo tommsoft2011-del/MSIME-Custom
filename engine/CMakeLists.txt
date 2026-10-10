@@ -188,6 +188,16 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME punctuation_contract COMMAND test_punctuation_contract)
 
+    add_executable(test_url_english_input_contract contracts/tests/url_english_input_contract.cpp)
+    if(MSVC)
+        target_compile_options(test_url_english_input_contract PRIVATE /utf-8)
+    endif()
+    add_test(NAME url_english_input_contract COMMAND test_url_english_input_contract)
+
+    add_executable(test_quanpin_url_english_input tests/src/test_quanpin_url_english_input.cpp)
+    target_link_libraries(test_quanpin_url_english_input PRIVATE MetasequoiaIme::Engine)
+    add_test(NAME quanpin_url_english_input COMMAND test_quanpin_url_english_input)
+
     add_executable(test_nine_key_session tests/src/test_nine_key_session.cpp)
     target_link_libraries(test_nine_key_session PRIVATE MetasequoiaImeEngine)
     add_test(NAME nine_key_session COMMAND test_nine_key_session)

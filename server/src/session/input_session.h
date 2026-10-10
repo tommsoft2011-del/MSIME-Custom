@@ -62,8 +62,7 @@ class IInputSession
     // uniqueness required. The Server commits the first candidate when the user types past it.
     virtual bool wubi_four_code_is_complete() const = 0;
     virtual bool has_active_helpcode() const = 0;
-    // "." 是否应作为英文输入处理（而非翻页键）：已在英文临时模式中，
-    // 或按 engine 判定此次 "." 会转入英文模式（如 "test."）时为真。
+    // Temporary-English mode must not interpret a period as candidate paging.
     virtual bool period_is_english_input() const = 0;
     // 光标停在 caret 处时反引号能否作为句中辅助码插进编码串，语义见 engine
     // accepts_mid_sentence_helpcode_marker_at。默认不能。

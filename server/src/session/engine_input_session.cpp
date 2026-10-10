@@ -216,8 +216,7 @@ bool EngineInputSession::has_active_helpcode() const
 
 bool EngineInputSession::period_is_english_input() const
 {
-    return session_.local_input_mode() == metasequoia::LocalInputMode::TemporaryEnglish ||
-           session_.symbol_continues_english_input();
+    return session_.local_input_mode() == metasequoia::LocalInputMode::TemporaryEnglish;
 }
 
 bool EngineInputSession::accepts_mid_sentence_helpcode_marker(std::size_t caret) const

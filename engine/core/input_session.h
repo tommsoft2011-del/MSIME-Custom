@@ -43,8 +43,6 @@ class InputSession
     // Maps the visible 1-9 candidate keys and Chinese punctuation independently of platform UI.
     KeyResult handle_candidate_key(char character);
     KeyResult handle_punctuation(char character);
-    // 中文全拼输入中的 "." 是继续英文（如 "aaaa.com"）还是中文句点。
-    bool symbol_continues_english_input() const;
     // Commit the selected prefix and retain any unconsumed pinyin. Hosts insert
     // KeyResult::commit and then render the remaining preedit from this session.
     KeyResult select_candidate(std::size_t index);
@@ -308,8 +306,6 @@ class InputSession
     // Last complete unit boundary at or before the caret; only consumes segment_raw_boundaries()
     // (segmentation contract #187). caret unset or no unit model yields the full raw length.
     std::size_t quantized_prefix_end() const;
-    // 定制版：串里有网址符号时，第一个符号的位置（候选只由它之前的部分产生）。
-    std::optional<std::size_t> url_symbol_prefix_end() const;
     // Decodes the quantized caret prefix into prefix_candidates_ when it is strictly shorter
     // than the raw string, caching by prefix so unchanged keystrokes skip the extra query.
     void refresh_prefix_candidates();

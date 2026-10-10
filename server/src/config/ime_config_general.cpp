@@ -502,11 +502,7 @@ std::wstring FormatVModeWorkerPayload()
                             : scheme == SchemeType::Quanpin   ? Trigger::AnyCase
                             : scheme == SchemeType::Shuangpin ? Trigger::UppercaseOnly
                                                               : Trigger::Off;
-    // 定制版：第二位告诉 TSF 当前是不是全拼/双拼（"1"/"0"），决定网址 / 英文串的 . @ 等是否当编码键，
-    // 规则见 engine/contracts/url_english_input.h。方案切换时载荷随之变化，会重新广播。
-    std::wstring payload(1, FanyImeVModeInput::PayloadFromTrigger(trigger));
-    payload.push_back(scheme == SchemeType::Quanpin || scheme == SchemeType::Shuangpin ? L'1' : L'0');
-    return payload;
+    return std::wstring(1, FanyImeVModeInput::PayloadFromTrigger(trigger));
 }
 
 bool GetConfiguredClipboardHistoryEnabled()
