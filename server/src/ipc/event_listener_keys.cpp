@@ -1132,8 +1132,12 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
         ScopedKeyStage engine_forward{client_id, activation_epoch, request_id, L"handle-engine"};
         g_inputSession->handle_key(Global::Keycode, Global::ModifiersDown, Global::Wch);
     }
-    GlobalIme::composition.segmented_pinyin = g_inputSession->get_pinyin_segmentation_with_cases();
-    GlobalIme::composition.raw_input_with_cases = g_inputSession->get_pinyin_sequence_with_cases();
+    // URL/英文模式：Server 本地维护，不从 Engine 取（Engine 解析不了带标点的串）。
+    if (!is_url_english_input_key)
+    {
+        GlobalIme::composition.segmented_pinyin = g_inputSession->get_pinyin_segmentation_with_cases();
+        GlobalIme::composition.raw_input_with_cases = g_inputSession->get_pinyin_sequence_with_cases();
+    }
     if (g_english_input_mode)
     {
         // English candidates are queried by the raw spelling. Do not expose
