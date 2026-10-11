@@ -296,9 +296,11 @@ bool ApplyCompositionEditKey(UINT keycode, WCHAR wch, UINT modifiers_down, bool 
     }
     composition.caret_position = (std::min)(composition.caret_position, raw.size());
 
-    // URL/英文模式：绕开 Engine，Server 本地维护 raw 串。
+    // URL/英文模式：绕开 Engine 解析，Server 本地维护 raw 串。
     // Engine 解析不了 "aaa." 这类串，一喂就清掉。按青简 raw_mode 思路，
     // 有标点的串不走拼音解析，直接当原文处理。
+    // 注意：必须同步更新 Engine 的存储值（只存不解析），否则下次
+    // input_before_key 取到的还是旧串，导致后续按键判断错误。
     if (IsUrlEnglishInputKey(wch, raw))
     {
         raw.insert(raw.begin() + static_cast<std::ptrdiff_t>(composition.caret_position),
@@ -307,6 +309,9 @@ bool ApplyCompositionEditKey(UINT keycode, WCHAR wch, UINT modifiers_down, bool 
         composition.raw_input_with_cases = raw;
         composition.segmented_pinyin = raw;
         composition.note_raw_inserted();
+        // 同步 Engine 存储，但不触发解析（跳过 recompute_candidates）。
+        g_inputSession->set_pinyin_sequence(raw);
+        g_inputSession->set_pinyin_sequence_with_cases(raw);
         return true;
     }
 
