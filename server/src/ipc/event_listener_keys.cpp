@@ -13,7 +13,6 @@
 #include "engine/contracts/direct_helpcode.h"
 #include "engine/contracts/ipc_negotiation.h"
 #include "engine/contracts/mid_sentence_helpcode.h"
-#include "engine/contracts/url_english_input.h"
 #include "defines/defines.h"
 #include "defines/globals.h"
 #include "utils/common_utils.h"
@@ -116,7 +115,7 @@ bool IsCommitWithHighlightedCandidatePunctuationInCandidateMode(UINT keycode, WC
         L'"',  //
         L',',  //
         L'<',  //
-        L'.',  // 定制版: "." 有候选时走英文模式, 在提交分支特殊处理, 不直接上屏中文+句号.
+        L'.',  //
         L'>',  //
         L'?'   //
     };
@@ -202,22 +201,14 @@ bool IsVModeInputKey(WCHAR wch, const std::string &raw_input)
                                         CurrentVModeTrigger());
 }
 
-// 网址/纯英文输入的编码键：首字母大写，或小写开头后输入 . @ - _ / :。
-// 规则见 engine/contracts/url_english_input.h，与 TSF 用同一份。
+// 网址/英文标点键：. @ - _ / :，规则见 engine/contracts/url_english_input.h。
 bool IsUrlEnglishInputKey(WCHAR wch, const std::string &raw_input)
 {
     if (wch > 0x7f || g_inputSession == nullptr || raw_input.empty())
     {
         return false;
     }
-    // raw_input 是带大小写的原始串，转成 char 用共享规则判断。
-    std::string narrow;
-    narrow.reserve(raw_input.size());
-    for (char c : raw_input)
-    {
-        narrow.push_back(c);
-    }
-    return FanyImeUrlEnglishInput::AcceptsChar(narrow.data(), narrow.size(), static_cast<char>(wch));
+    return FanyImeUrlEnglishInput::AcceptsChar(raw_input.data(), raw_input.size(), static_cast<char>(wch));
 }
 
 bool IsMicrosoftShuangpinIngKey(UINT keycode, WCHAR wch, const std::string &raw_input)
@@ -288,12 +279,6 @@ bool IsCandidateNavigationKey(UINT keycode)
     {
         return false;
     }
-    // Custom: comma/period are not navigation keys when paging is disabled.
-    // Engine handle_punctuation takes over (temporary English mode).
-    if (!GetConfiguredPagingCommaPeriodEnabled() && (keycode == VK_OEM_COMMA || keycode == VK_OEM_PERIOD))
-    {
-        return false;
-    }
     return keycode == VK_OEM_MINUS || keycode == VK_OEM_PLUS || keycode == VK_OEM_COMMA || keycode == VK_OEM_PERIOD ||
            keycode == VK_OEM_4 || keycode == VK_OEM_6 || keycode == VK_TAB || keycode == VK_PRIOR ||
            keycode == VK_NEXT || keycode == VK_UP || keycode == VK_DOWN;
@@ -310,6 +295,20 @@ bool ApplyCompositionEditKey(UINT keycode, WCHAR wch, UINT modifiers_down, bool 
         composition.caret_position = raw.size();
     }
     composition.caret_position = (std::min)(composition.caret_position, raw.size());
+
+    // URL/英文模式：绕开 Engine，Server 本地维护 raw 串。
+    // Engine 解析不了 "aaa." 这类串，一喂就清掉。按青简 raw_mode 思路，
+    // 有标点的串不走拼音解析，直接当原文处理。
+    if (IsUrlEnglishInputKey(wch, raw))
+    {
+        raw.insert(raw.begin() + static_cast<std::ptrdiff_t>(composition.caret_position),
+                   static_cast<char>(wch));
+        ++composition.caret_position;
+        composition.raw_input_with_cases = raw;
+        composition.segmented_pinyin = raw;
+        composition.note_raw_inserted();
+        return true;
+    }
 
     // R2/R10：光标前缀重算总门控（与 Ctrl+Backspace / Ctrl+方向同一谓词族）。未协商、
     // UILess、专用英文、特殊模式组合一律维持整串转换，光标只是显示层插入点。
@@ -1025,8 +1024,7 @@ void HandleImeKey(uint64_t client_id, uint64_t activation_epoch, uint64_t reques
     const bool is_date_time_input_key = IsDateTimeInputKey(Global::Keycode, Global::Wch, input_before_key);
     // V 模式的数字和 . + - * / ( )：只进输入串，不选词、不翻页、不当标点。
     const bool is_v_mode_input_key = IsVModeInputKey(Global::Wch, input_before_key);
-    // 网址/纯英文的符号 . @ - _ / :：只进输入串，不选词、不翻页、不当标点。
-    // 规则见 engine/contracts/url_english_input.h，与 TSF 用同一份。
+    // 网址/英文标点 . @ - _ / :：只进输入串，不选词、不翻页、不当标点。
     const bool is_url_english_input_key = IsUrlEnglishInputKey(Global::Wch, input_before_key);
     // V 模式里数字键用来输入，Shift+数字选词（同 U 模式）。Shift+1 出的是 !，不排除就会被当成「上屏高亮候选
     // + 标点」；Shift+8/9/0 出 * ( ) 是编码键，上一行已经收下。
