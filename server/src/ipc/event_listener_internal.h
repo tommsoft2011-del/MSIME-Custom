@@ -18,6 +18,7 @@
 #include "ipc/candidate_ui_owner.h"
 #include "ipc/event_listener.h"
 #include "engine/contracts/v_mode_input.h"
+#include "engine/contracts/url_english_input.h"
 #include "window/caret_state_indicator_policy.h"
 
 // IPC logging is compiled out. The macros still have to *mention* their arguments, otherwise every
